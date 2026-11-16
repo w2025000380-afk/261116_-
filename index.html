@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>바람과 오염 관측소</title>
+<style>
+:root{
+  --bg:#f6f3ee; --card:#ffffff; --line:#ebe6df; --text:#3e4553; --muted:#8a8f9c;
+  --blue:#a8c8f0; --blue-d:#5f8fd1; --pink:#ffc2c7; --peach:#ffd8b1; --mint:#bfe6d3; --lav:#d7c9f2; --yellow:#fff1b8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;overflow:hidden}
+#app{display:grid;grid-template-columns:1fr 300px;grid-template-rows:auto 1fr auto;height:100vh;gap:0}
+header{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:14px 22px 6px}
+header h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.01em}
+header .sub{color:var(--muted);font-size:13px}
+.spacer{flex:1}
+button{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 15px;cursor:pointer;transition:background .15s,border-color .15s,transform .05s;white-space:nowrap}
+button:hover{border-color:#cfc6ba}
+button:active{transform:translateY(1px)}
+button.on{background:var(--text);color:#fff;border-color:var(--text)}
+button.soft{background:#efeae3;border-color:transparent}
+main{display:flex;flex-direction:column;min-width:0;min-height:0;padding:6px 10px 0 22px}
+#views{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+#views button{padding:7px 14px}
+#stage{flex:1;min-height:0;position:relative}
+#mapwrap{position:absolute;inset:0;border-radius:18px;overflow:hidden;box-shadow:0 6px 24px rgba(80,70,50,.10);background:#dbe9f3}
+#mapwrap canvas{position:absolute;left:0;top:0}
+#over{cursor:grab;touch-action:none}
+.zoomctl{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:6px;align-items:center;z-index:2}
+.zoomctl button{width:36px;height:36px;padding:0;border-radius:12px;background:rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.08);font-size:17px;line-height:1}
+.zoomctl span{font-size:11px;color:var(--muted);background:rgba(255,255,255,.85);border-radius:999px;padding:1px 7px}
+button:disabled{opacity:.45;cursor:default}
+#legend{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0 2px;color:var(--muted);font-size:12.5px;min-height:22px}
+#legend canvas{border-radius:6px;width:220px;height:12px}
+#hint{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;background:rgba(255,255,255,.92);padding:6px 14px;border-radius:999px;font-size:12.5px;color:var(--muted);pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:opacity .4s}
+aside{padding:6px 22px 0 10px;overflow-y:auto}
+.card{background:var(--card);border-radius:16px;padding:14px 16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(80,70,50,.06)}
+.card h2{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 8px;letter-spacing:.02em}
+.when{display:flex;align-items:center;gap:12px}
+.when .icon{font-size:30px;line-height:1}
+.when .date{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.when .season{color:var(--muted);font-size:13px}
+.stat{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line)}
+.stat:last-child{border-bottom:none}
+.stat span{color:var(--muted)}
+.stat b{font-weight:600;font-variant-numeric:tabular-nums}
+.compass{display:inline-block;width:22px;height:22px;border-radius:50%;background:#eef3fa;text-align:center;line-height:22px;margin-right:6px;font-size:13px}
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;margin-left:4px}
+.chip.h{background:var(--pink)} .chip.l{background:var(--blue)} .chip.s{background:var(--yellow)}
+#chart{width:100%;height:110px;display:block}
+.chart-legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);margin-top:4px}
+.chart-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+footer{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:12px 22px 16px}
+#play{min-width:96px;background:var(--text);color:#fff;border-color:var(--text)}
+.seg{display:flex;background:#efeae3;border-radius:999px;padding:3px}
+.seg button{border:none;background:transparent;padding:5px 13px}
+.seg button.on{background:#fff;color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+#timeline{flex:1;position:relative;height:30px}
+#track{position:absolute;left:0;right:0;top:9px;height:10px;border-radius:999px;background:#ece6dd;overflow:hidden}
+#fill{height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--lav),var(--pink),var(--peach),var(--mint),var(--blue))}
+#months{position:absolute;left:0;right:0;top:20px;display:flex;font-size:10.5px;color:var(--muted)}
+#months span{flex:1;text-align:left;padding-left:2px}
+footer .score{margin-left:4px;background:linear-gradient(90deg,#ffd6dc,#ffe6c7);border-color:transparent;font-weight:600}
+footer .score:disabled{opacity:.5;cursor:default}
+#score-status{color:var(--muted);font-size:12.5px;min-width:120px}
+.pen-total{display:flex;align-items:baseline;gap:8px}
+.pen-total b{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.pen-total span{color:var(--muted);font-size:12px}
+.pen-note{font-size:12px;color:var(--muted);margin:2px 0 8px}
+.pen-note.stale{color:#d9822b}
+.pbar{margin:7px 0}
+.pbar .top{display:flex;justify-content:space-between;font-size:12.5px}
+.pbar .top span{color:var(--muted)}
+.pbar .top b{font-weight:600;font-variant-numeric:tabular-nums}
+.pbar .track{height:7px;border-radius:999px;background:#f1ece5;overflow:hidden;margin-top:3px}
+.pbar .fill{height:100%;border-radius:999px;width:0;transition:width .3s}
+.nfac{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.nfac input{flex:1;accent-color:#b39ddb}
+.nfac b{color:var(--text);min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+.ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ai-grid button{padding:8px 6px;border-radius:12px;font-size:13px}
+.ai-status{font-size:12px;color:var(--muted);margin:8px 0 4px;min-height:18px}
+.ai-prog{height:5px;border-radius:999px;background:#f1ece5;overflow:hidden}
+.ai-prog div{height:100%;width:0;background:linear-gradient(90deg,var(--lav),var(--pink));transition:width .2s}
+.ai-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+.ai-table th{font-weight:600;color:var(--muted);text-align:right;padding:3px 2px;font-size:11.5px}
+.ai-table th:first-child,.ai-table td:first-child{text-align:left}
+.ai-table td{padding:5px 2px;text-align:right;font-variant-numeric:tabular-nums;border-top:1px dashed var(--line)}
+.ai-table tr[data-run]{cursor:pointer}
+.ai-table tr[data-run]:hover td{background:#faf7f2}
+.ai-table tr.cur td{background:#f5f0fb}
+.ai-table tr.best td:first-child::after{content:' ★';color:#2f9e6e}
+.ai-table .muted,.ai-table .empty{color:#b5b8c2}
+.ai-model{margin-top:10px;font-size:12px;color:var(--muted)}
+.ai-model summary{cursor:pointer}
+.ai-model .spec{margin:6px 0;line-height:1.6}
+.ai-model code{background:#f3eee7;padding:0 4px;border-radius:4px}
+.hidden{display:none!important}
+.ai-banner{position:absolute;left:16px;top:14px;z-index:3;width:min(520px,calc(100% - 90px));background:rgba(255,255,255,.95);border-radius:18px;padding:14px 16px 12px;box-shadow:0 8px 28px rgba(90,70,140,.18);border:2px solid #e3d6fb;backdrop-filter:blur(4px)}
+.ai-banner.done{border-color:#bfe6d3}
+.ab-close{position:absolute;right:8px;top:6px;border:none;background:none;font-size:18px;color:#b5b8c2;padding:2px 8px}
+.ab-top{display:flex;gap:12px;align-items:flex-start}
+.ab-robot{font-size:30px;line-height:1;animation:bob 1.2s ease-in-out infinite}
+.ai-banner.done .ab-robot{animation:none}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+#ab-title{font-size:15.5px;display:block;margin-bottom:2px}
+#ab-sub{font-size:12.5px;color:var(--muted)}
+#ab-sub b.good,.good{color:#2f9e6e}
+#ab-sub b.bad,.bad{color:#d9534f}
+.ab-steps{display:flex;align-items:center;gap:6px;margin:12px 0 8px;font-size:11.5px;color:#b5b8c2}
+.ab-steps span{padding:3px 9px;border-radius:999px;background:#f3f0ea;white-space:nowrap;transition:all .2s}
+.ab-steps span.past{background:#e9f6ef;color:#2f9e6e}
+.ab-steps span.on{background:#7b52d9;color:#fff;font-weight:600;box-shadow:0 2px 8px rgba(123,82,217,.35)}
+.ab-steps i{flex:1;height:2px;background:#ece6dd;min-width:6px}
+.ab-bar{height:6px;border-radius:999px;background:#f1ece5;overflow:hidden}
+.ab-bar div{height:100%;width:0;background:linear-gradient(90deg,#c7a4f5,#7b52d9);transition:width .25s}
+.ai-banner.done .ab-steps span.on{background:#55c08a;box-shadow:0 2px 8px rgba(85,192,138,.35)}
+.ai-banner.done .ab-steps span{transition:none}
+.ai-banner.done .ab-bar div{background:linear-gradient(90deg,#bfe6d3,#55c08a)}
+body.ai-busy #ai-agents{opacity:.7}
+.ai-feed{font-size:12px;margin-top:8px;max-height:150px;overflow:hidden}
+.ai-feed div{padding:4px 8px;border-radius:8px;background:#f8f5fd;margin-bottom:3px;animation:fadein .3s;display:flex;gap:6px;align-items:baseline;white-space:nowrap}
+.ai-feed em{font-style:normal;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ai-feed div.ok{background:#eef8f2}
+.ai-feed b{color:#7b52d9;flex:none}
+.ai-feed span{margin-left:auto;color:var(--muted);flex:none}
+.ai-feed span.good{color:#2f9e6e;font-weight:600}
+@keyframes fadein{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+.mini-title{font-size:12px;color:var(--muted);margin:10px 0 4px;display:flex;justify-content:space-between}
+.mini-title span{font-size:11px}
+.mini-title span::first-letter{color:#55c08a}
+#search-chart{width:100%;height:100px;display:block;margin-bottom:4px}
+.ai-runs{margin-top:10px}
+.runs-head{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+.run{padding:7px 8px;border-radius:10px;cursor:pointer;margin-bottom:3px}
+.run:hover{background:#faf7f2}
+.run.cur{background:#f5f0fb}
+.run-top{display:flex;justify-content:space-between;font-size:12.5px}
+.run-top i{color:#b5b8c2;font-style:normal}
+.run-top b{font-variant-numeric:tabular-nums}
+.run.best .run-top b{color:#2f9e6e}
+.run-bar{height:8px;border-radius:999px;background:#f1ece5;overflow:hidden;margin:4px 0 2px}
+.run-bar div{height:100%;border-radius:999px;transition:width .4s}
+.run-sub{font-size:11px;color:#b5b8c2}
+.ai-runs .empty{font-size:12px;color:#b5b8c2;padding:6px 0}
+#tooltip{position:fixed;pointer-events:none;background:rgba(255,255,255,.97);border-radius:12px;padding:9px 12px;font-size:12.5px;display:none;z-index:10;box-shadow:0 4px 18px rgba(0,0,0,.10);line-height:1.6;white-space:nowrap}
+#tooltip b{font-weight:600}
+
+/* ===== 차분한 디자인 (각진 모서리 · 얇은 선 · 그림자 최소화) ===== */
+:root{--bg:#f3f1ec;--card:#ffffff;--line:#e2ddd4;--text:#23272f;--muted:#7a7f89;--acc:#33428f;--good:#2e7d62;--bad:#b4473f}
+html,body{font-size:13.5px;letter-spacing:-.005em}
+header{padding:12px 22px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{font-size:15px;font-weight:650}
+header .sub{font-size:12.5px}
+button{border-radius:3px;padding:6px 12px;background:var(--card);border:1px solid var(--line);box-shadow:none;transition:border-color .12s,background .12s}
+button:hover{border-color:#b9b2a6}
+button.on{background:var(--text);border-color:var(--text);color:#fff}
+button.soft{background:transparent}
+main{padding:12px 10px 0 22px}
+#views{gap:0;border-bottom:1px solid var(--line);margin-bottom:12px}
+#views button{border:none;border-radius:0;background:transparent;padding:8px 13px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+#views button:hover{color:var(--text)}
+#views button.on{color:var(--text);border-bottom-color:var(--text);background:transparent;font-weight:600}
+#mapwrap{border-radius:2px;box-shadow:none;border:1px solid var(--line)}
+aside{padding:12px 22px 0 10px}
+.card{border-radius:3px;box-shadow:none;border:1px solid var(--line);padding:14px 16px}
+.card h2{font-size:11.5px;letter-spacing:.04em;color:var(--muted);font-weight:600;margin-bottom:10px}
+.when .date{font-size:18px}
+#w-icon{font-size:11px!important;font-weight:600;color:var(--muted);border:1px solid var(--line);padding:6px 8px;line-height:1}
+.chip{border-radius:2px}
+.compass{border-radius:2px;background:#f0f1f5}
+.zoomctl button{border-radius:2px;box-shadow:none;border:1px solid var(--line);background:#fff;width:32px;height:32px;font-size:15px}
+.zoomctl span{border-radius:2px}
+#hint{border-radius:2px;box-shadow:none;border:1px solid var(--line);background:#fff}
+#tooltip{border-radius:3px;box-shadow:0 2px 10px rgba(0,0,0,.08);border:1px solid var(--line)}
+#legend canvas{border-radius:0}
+footer{padding:10px 22px 14px;border-top:1px solid var(--line);background:var(--card)}
+#play{border-radius:3px;background:var(--text);border-color:var(--text)}
+.seg{border-radius:3px;background:transparent;border:1px solid var(--line);padding:0}
+.seg button{border-radius:0;padding:5px 12px}
+.seg button.on{background:var(--text);color:#fff;box-shadow:none}
+#track{border-radius:0;height:4px;top:11px}
+#fill{background:var(--acc)}
+footer .score{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+.pen-total b{font-size:26px}
+.pbar .track{border-radius:0;height:4px}
+.pbar .fill{border-radius:0}
+.nfac input{accent-color:var(--acc)}
+.ai-grid{gap:4px}
+.ai-grid button{border-radius:2px;text-align:left;padding:8px 10px}
+.ai-prog{border-radius:0;height:2px}
+.ai-prog div{background:var(--acc)}
+.ai-feed div{border-radius:0;background:transparent;border-left:2px solid #d5d9ec;padding:3px 8px;margin-bottom:2px}
+.ai-feed div.ok{background:transparent;border-left-color:var(--good)}
+.ai-feed b{color:var(--acc)}
+.ai-feed span.good,.good,#ab-sub b.good{color:var(--good)}
+.bad,#ab-sub b.bad{color:var(--bad)}
+.run{border-radius:0;border-bottom:1px solid var(--line);margin:0;padding:8px 2px}
+.run.cur{background:#f6f6f9}
+.run-bar{border-radius:0;height:4px;background:#efebe4}
+.run-bar div{border-radius:0}
+.run.best .run-top b{color:var(--good)}
+/* 지도 위 진행 표시줄: 떠 있는 카드 대신 지도 위쪽에 붙은 띠 */
+.ai-banner{left:0;right:0;top:0;width:auto;border-radius:0;border:none;border-bottom:1px solid var(--line);box-shadow:none;backdrop-filter:none;background:rgba(255,255,255,.97);padding:10px 16px 0}
+.ai-banner.done{border-color:var(--line)}
+.ab-top{gap:12px;align-items:center}
+.ab-mark{flex:none;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:var(--acc);color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;border-radius:2px}
+.ai-banner.done .ab-mark{background:var(--good)}
+#ab-title{font-size:14px;font-weight:650}
+.ab-steps{margin:10px 0 8px;gap:4px}
+.ab-steps span{border-radius:2px;background:transparent;border:1px solid var(--line);color:#a3a8b1;padding:2px 8px}
+.ab-steps span.past{background:transparent;border-color:#bcd9cb;color:var(--good)}
+.ab-steps span.on{background:var(--acc);border-color:var(--acc);color:#fff;box-shadow:none}
+.ai-banner.done .ab-steps span.on{background:var(--good);border-color:var(--good);box-shadow:none}
+.ab-steps i{height:1px;background:var(--line)}
+.ab-bar{height:2px;border-radius:0;margin:0 -16px}
+.ab-bar div{background:var(--acc)}
+.ai-banner.done .ab-bar div{background:var(--good)}
+.ab-close{top:8px}
+.zoomctl{top:auto;bottom:12px;right:12px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>바람과 오염 관측소</h1>
+    <span class="sub">640km × 640km 가상의 땅 · 대기 역학 모델</span>
+    <div class="spacer"></div>
+    <button id="btn-world" class="soft">새 지형</button>
+  </header>
+
+  <main>
+    <div id="views"></div>
+    <div id="stage">
+      <div id="mapwrap"><canvas id="field"></canvas><canvas id="parts"></canvas><canvas id="over"></canvas></div>
+      <div class="zoomctl"><button id="btn-zin" title="확대 (+)">＋</button><button id="btn-zout" title="축소 (−)">－</button><button id="btn-fit" title="전체 보기 (0 · 더블클릭)">⤢</button><span id="zoom-label">×1.0</span></div>
+      <div id="ai-banner" class="ai-banner hidden">
+        <button class="ab-close" title="닫기" onclick="this.parentNode.classList.add('hidden')">×</button>
+        <div class="ab-top"><span class="ab-mark">AI</span><div><b id="ab-title">AI 작업 중</b><div id="ab-sub"></div></div></div>
+        <div class="ab-steps"><span>① 지형 관찰</span><i></i><span>② 공장 배치</span><i></i><span>③ 시뮬레이터 채점</span><i></i><span>④ 결과</span></div>
+        <div class="ab-bar"><div id="ab-fill"></div></div>
+      </div>
+      <div id="hint">드래그로 이동 · 휠로 확대/축소 · 더블클릭으로 전체 보기</div>
+    </div>
+    <div id="legend"></div>
+  </main>
+
+  <aside>
+    <div class="card">
+      <div class="when"><div class="icon" id="w-icon"></div><div><div class="date" id="w-date"></div><div class="season" id="w-season"></div></div></div>
+    </div>
+    <div class="card">
+      <h2>AI 배치</h2>
+      <div class="nfac"><span>지을 공장 수</span><input type="range" id="nfac" min="8" max="48" step="1" value="24"><b id="nfac-v">24개</b></div>
+      <div id="ai-agents" class="ai-grid">
+        <button data-agent="random" title="배치 가능한 칸에 무작위로">무작위</button>
+        <button data-agent="rule" title="평지 선호, 숲·경사 회피, 서로 멀리 (사람이 정한 규칙)">규칙 기반</button>
+        <button data-agent="search" title="규칙 기반에서 출발해 시뮬레이터로 평가하며 공장을 옮겨 벌점을 낮춤 (약 1~2분)">탐색 AI</button>
+        <button data-agent="onnx" disabled title="학습된 모델(.onnx)을 불러오면 쓸 수 있어요">학습한 AI</button>
+      </div>
+      <div class="ai-status" id="ai-status">AI를 고르면 공장을 하나씩 놓고, 시뮬레이터로 채점해요</div>
+      <div class="ai-prog"><div id="ai-prog-fill"></div></div>
+      <div class="ai-feed" id="ai-feed"></div>
+      <div id="search-wrap" class="hidden"><div class="mini-title">탐색 AI의 벌점 변화 <span>● 채택 ● 되돌림</span></div><canvas id="search-chart" width="536" height="200"></canvas></div>
+      <div class="ai-runs" id="ai-table"></div>
+      <details class="ai-model">
+        <summary>학습 모델 연결 (ONNX)</summary>
+        <div class="spec">입력 <code>grid</code> [1, 9, 64, 64] · 고도, 바다, 숲, 높은 산, 배치 가능, 경사, 해안 거리, 가장자리 거리, <b>현재 배치</b><br>
+        입력 <code>globals</code> [1, 6] · 계절풍, 정체 빈도, 강수, 혼합고, 전체 공장 수/50, <b>남은 공장 수/50</b><br>
+        출력 <code>logits</code> [1, 4096] · 다음 공장을 놓고 싶은 정도<br>
+        공장 수만큼 하나씩 놓으며 매번 모델을 다시 실행해요 (train_gui.py → ONNX 내보내기로 만든 파일) · 모델 실행(onnxruntime-web)은 인터넷 연결이 필요해요</div>
+        <button id="btn-onnx" class="soft">.onnx 불러오기</button>
+        <input type="file" id="onnx-file" accept=".onnx" hidden>
+        <div class="spec" id="onnx-info">아직 불러온 모델이 없어요</div>
+      </details>
+    </div>
+    <div class="card">
+      <h2>벌점 · AI가 줄여야 할 점수 <span style="font-weight:400">(낮을수록 좋음)</span></h2>
+      <div class="pen-total"><b id="p-total">0</b><span id="p-over"></span></div>
+      <div class="pen-note" id="p-note"></div>
+      <div id="p-bars"></div>
+    </div>
+    <div class="card">
+      <h2>지금 날씨</h2>
+      <div class="stat"><span>바람</span><b id="s-wind"></b></div>
+      <div class="stat"><span>육지 평균 기온</span><b id="s-temp"></b></div>
+      <div class="stat"><span>비 오는 지역</span><b id="s-rain"></b></div>
+      <div class="stat"><span>기압계</span><b id="s-press"></b></div>
+    </div>
+    <div class="card">
+      <h2>오염</h2>
+      <div class="stat"><span>공장</span><b id="s-fac"></b></div>
+      <div class="stat"><span>지금 공기 중</span><b id="s-air"></b></div>
+      <div class="stat"><span>가장 짙은 곳</span><b id="s-max"></b></div>
+      <div class="stat"><span>땅에 쌓인 양</span><b id="s-dep"></b></div>
+    </div>
+    <div class="card">
+      <h2>시간에 따른 변화</h2>
+      <canvas id="chart" width="536" height="220"></canvas>
+      <div class="chart-legend"><span><i style="background:#b77df0"></i>공기 중 오염량</span><span><i style="background:#ffa974"></i>땅에 쌓인 양(누적)</span><span>· 각자 최댓값 대비 %</span></div>
+    </div>
+  </aside>
+
+  <footer>
+    <button id="btn-reset" class="soft" title="1월 1일로 되돌리기">⟲ 처음부터</button>
+    <button id="play">▶ 재생</button>
+    <div class="seg" id="speeds"></div>
+    <div id="timeline"><div id="track"><div id="fill"></div></div><div id="months"></div></div>
+    <button id="btn-score" class="score" title="지금 배치로 1월 1일부터 1년 전체를 계산해 벌점을 매겨요">1년 채점</button>
+    <span id="score-status"></span>
+  </footer>
+</div>
+<div id="tooltip"></div>
+
+<!-- ============================================================
+     CORE: 순수 계산 코드 (DOM 사용 안 함 · 브라우저/Worker/Node 공용)
+     ============================================================ -->
+<script id="core">
+(function (root) {
+'use strict';
+
+const CONFIG = { NX: 64, NY: 64, DX: 10000, HOURS: 8760 };
+const NX = CONFIG.NX, NY = CONFIG.NY, NC = NX * NY, DX = CONFIG.DX, AREA = DX * DX, HOURS = CONFIG.HOURS;
+const LC = { SEA: 0, LOW: 1, FOREST: 2, HIGH: 3 };        // 바다 / 평지 / 숲 / 고산
+
+/* 물리 매개변수 (초기 근사) */
+const PHYS = {
+  EMIS: 1000,                                  // 공장당 SO2 배출 kg/h
+  MAX_PER_CELL: 5,                             // 한 칸 최대 공장 수
+  KH: 3000,                                    // 수평 확산계수 m²/s
+  VD_SO2: [0.007, 0.006, 0.010, 0.004],        // 토지별 SO2 건식침착속도 m/s
+  VD_SO4: 0.002,
+  K_GAS: 5e-6, K_AQ: 3e-5,                     // 산화: 일사 / 구름 속 (1/s)
+  OX_HALF: 0.25, OX_CAP: 200, OX_TAU: 12 * 3600,
+  WET_SO2: 2e-5, WET_SO4: 1e-4, WET_EXP: 0.75  // 비에 씻김 a·P^b
+};
+
+const climate = { monsoon: 1, stagnation: 0.2, precip: 1, mixing: 1 };
+
+/* 벌점 (AI가 최소화할 값). 기준치는 실제 근거, 가중치는 임시값.
+   기준을 넘으면 '넘은 양 + SQ × 넘은 양²'으로 커져서 한곳에 몰아 지을수록 급격히 불리해짐 */
+const PEN = {
+  LIMIT_AVG: 20,    // SO2 연평균 µg/m³ — UNECE 숲·자연식생 임계수준
+  LIMIT_WIN: 20,    // SO2 겨울 반년(10~3월) 평균 µg/m³ — UNECE
+  LIMIT_DAY: 40,    // SO2 일평균 µg/m³ — WHO 2021 대기질 지침(24시간)
+  LIMIT_DEP: 16,    // 황 침착 kg S/ha/년 (= 1 keq) — 일반적인 산성 임계부하 수준
+  SQ: 0.25,         // 초과량 제곱 항 비율
+  W_OVER: 3,        // 연평균 초과 (µg/m³ × 칸)
+  W_WIN: 2,         // 겨울 반년 평균 초과
+  W_DAY: 0.5,       // 일평균 40 초과량 (µg/m³ × 일 × 칸, 연환산)
+  W_DEP: 10,        // 침착 초과 비율 (a + a²)
+  W_LOAD: 0.02,     // 전체 오염 부담: 육지 칸 연평균 농도 합
+  W_OUT: 2          // 지도 밖 유출 kt S/년
+};
+
+/* ---------- 난수 / 노이즈 ---------- */
+function mulberry32(a) {
+  a = a >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeNoise(rng) {
+  const p = new Uint8Array(256), perm = new Uint8Array(512), val = new Float32Array(256);
+  for (let i = 0; i < 256; i++) { p[i] = i; val[i] = rng(); }
+  for (let i = 255; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = p[i]; p[i] = p[j]; p[j] = t; }
+  for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  const L = (ix, iy) => val[perm[(perm[ix & 255] + (iy & 255)) & 511]];
+  const s = t => t * t * (3 - 2 * t);
+  function n2(x, y) {
+    const ix = Math.floor(x), iy = Math.floor(y), sx = s(x - ix), sy = s(y - iy);
+    const a = L(ix, iy), b = L(ix + 1, iy), c = L(ix, iy + 1), d = L(ix + 1, iy + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  }
+  function fbm(x, y, oct) {
+    let f = 1, amp = 1, sum = 0, norm = 0;
+    for (let o = 0; o < oct; o++) { sum += amp * n2(x * f, y * f); norm += amp; f *= 2; amp *= 0.5; }
+    return sum / norm;
+  }
+  return { n2, fbm };
+}
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+/* ---------- 지형 ---------- */
+function generateTerrain(seed) {
+  const rng = mulberry32((seed * 9301 + 49297) >>> 0);
+  const nE = makeNoise(rng), nR = makeNoise(rng), nM = makeNoise(rng);
+  const F = () => new Float32Array(NC);
+  const raw = F();
+  const ang = rng() * Math.PI, ca = Math.cos(ang), sa = Math.sin(ang);
+  const ox = 0.35 + rng() * 0.3, oy = 0.35 + rng() * 0.3, sx = rng() * 50, sy = rng() * 50;
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const u = x / NX, v = y / NY, i = y * NX + x;
+    const e = nE.fbm(u * 3 + sx, v * 3 + sy, 5);
+    const r = 1 - Math.abs(nR.fbm(u * 2.4 + sy, v * 2.4 + sx, 4) * 2 - 1);
+    const d = (u - ox) * sa - (v - oy) * ca;
+    raw[i] = e * 0.85 + r * r * Math.exp(-d * d / 0.025) * 0.85 - Math.hypot(u - 0.5, v - 0.5) * 0.95;
+  }
+  const sorted = Float32Array.from(raw).sort();
+  const sea = sorted[Math.floor(NC * 0.32)], mx = sorted[NC - 1], mn = sorted[0];
+  const elev = F(), dhx = F(), dhy = F();
+  const lc = new Uint8Array(NC), cap = new Uint8Array(NC);
+  for (let i = 0; i < NC; i++)
+    elev[i] = raw[i] > sea ? Math.pow((raw[i] - sea) / (mx - sea), 1.35) * 2400 + 5
+                           : -20 - Math.pow((sea - raw[i]) / (sea - mn), 0.8) * 1400;
+  const H = i => Math.max(0, elev[i]);
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const i = y * NX + x;
+    const xl = Math.max(0, x - 1), xr = Math.min(NX - 1, x + 1), yu = Math.max(0, y - 1), yd = Math.min(NY - 1, y + 1);
+    dhx[i] = (H(y * NX + xr) - H(y * NX + xl)) / ((xr - xl) * DX);
+    dhy[i] = (H(yd * NX + x) - H(yu * NX + x)) / ((yd - yu) * DX);
+    const m = nM.fbm(x / NX * 4 + 3, y / NY * 4 + 9, 4);
+    lc[i] = elev[i] <= 0 ? LC.SEA : elev[i] > 1700 ? LC.HIGH : (m > 0.46 || elev[i] > 650) ? LC.FOREST : LC.LOW;
+    cap[i] = (lc[i] === LC.SEA || lc[i] === LC.HIGH) ? 0 : PHYS.MAX_PER_CELL;
+  }
+  return { seed, elev, dhx, dhy, lc, cap };
+}
+
+/* ---------- 기상: 1층 대기 경계층 역학 모델 ----------
+   20km 격자(32×32)에서 다음 방정식을 시간 적분한다.
+   운동량  du/dt = −g'∇(h+zs) + (h/2)(g/θ₀)∇θ' − f k×(u − u_g) − C_d|u|u/h + ν∇²u
+   연속    ∂h/∂t = −∇·(h u)                     (h: 경계층 두께)
+   열      dθ'/dt = 지표 가열(일사) − 복사 냉각 − θ'/τ
+   수증기  dq/dt = 증발 − 응결(상승기류 × 포화도)
+   u_g(종관 지균풍)는 이동하는 고·저기압과 계절풍에서 오는 외부 강제력이다.
+   결과 바람·비·혼합고는 10km 격자로 보간해서 오염 수송에 쓴다. */
+const ND = NX / 2, NDC = ND * ND, DXD = DX * 2;
+const DYN = {
+  H0: 1500, HMIN: 150,      // 경계층 기준 두께 m
+  GR: 0.25,                 // 역전층 환산중력 g' m/s²
+  F: 9e-5,                  // 코리올리 (위도 약 38°)
+  G: 9.81, TH0: 290,
+  CD_SEA: 1.2e-3, CD_LAND: 3.5e-3, CD_MTN: 6e-3,
+  NU: 2.5e4,                // 수평 점성 m²/s
+  TAU_H: 2 * 86400, TAU_TH: 86400,
+  HQ: 2000,                 // 수증기 감소 고도척도 m
+  ZS_SCALE: 0.6,            // 역학에 쓰는 지형 높이 비율(20km 평균에서 봉우리 높이 보정)
+  SPONGE: 3
+};
+const qsat = (Tc, pHpa) => 0.622 * 6.112 * Math.exp(17.67 * Tc / (Tc + 243.5)) / pHpa;
+
+function Weather(T, seed, h0) {
+  h0 = h0 || 0;
+  this.T = T;
+  this.rng = mulberry32((seed * 7919 + 13 + h0 * 31) >>> 0);
+  const F = () => new Float32Array(NC), D = () => new Float64Array(NDC);
+  // 10km 출력
+  this.u = F(); this.v = F(); this.H = F(); this.P = F(); this.cloud = F(); this.sun = F(); this.p = F(); this.Tc = F();
+  // 20km 상태
+  this.du = D(); this.dv = D(); this.dh = D(); this.dth = D(); this.dq = D();
+  this.nu = D(); this.nv = D(); this.nh = D(); this.nth = D(); this.nq = D();
+  this.ou = D(); this.ov = D(); this.oth = D(); this.oq = D();
+  this.ug = D(); this.vg = D(); this.pc = D(); this.Q = D(); this.qeq = D(); this.wsyn = D();
+  this.um = D(); this.vm = D(); this.rain = D(); this.rh = D(); this.cldC = D(); this.qsC = D();
+  // 지형 (20km)
+  this.zs = D(); this.zr = D(); this.land = D(); this.cd = D(); this.heq = D();
+  const raw = D();
+  for (let Y = 0; Y < ND; Y++) for (let X = 0; X < ND; X++) {
+    let z = 0, l = 0, hi = 0;
+    for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+      const i = (2 * Y + a) * NX + 2 * X + b, e = T.elev[i];
+      z += Math.max(0, e); if (e > 0) l++; if (T.lc[i] === LC.HIGH || T.lc[i] === LC.FOREST) hi++;
+    }
+    const I = Y * ND + X;
+    raw[I] = z / 4; this.zr[I] = z / 4; this.land[I] = l / 4;
+    this.cd[I] = l === 0 ? DYN.CD_SEA : (hi >= 2 ? DYN.CD_MTN : DYN.CD_LAND);
+  }
+  for (let Y = 0; Y < ND; Y++) for (let X = 0; X < ND; X++) {   // 3×3 평활
+    let s = 0, n = 0;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const yy = Y + a, xx = X + b; if (yy < 0 || xx < 0 || yy >= ND || xx >= ND) continue;
+      s += raw[yy * ND + xx] * (a === 0 && b === 0 ? 2 : 1); n += a === 0 && b === 0 ? 2 : 1;
+    }
+    const I = Y * ND + X;
+    this.zs[I] = s / n * DYN.ZS_SCALE;
+    this.heq[I] = Math.max(DYN.HMIN * 2, DYN.H0 - this.zs[I]);
+  }
+  // 종관 기압계
+  this.systems = [];
+  for (let k = 0; k < 3; k++) this.spawn(true);
+  this.next = 20 + this.rng() * 40;
+  this.ex = new Float64Array(16 * NX); this.ey = new Float64Array(16 * NY);
+  // 초기화와 예열(시간은 흐르지 않음)
+  this.forcing(h0);
+  for (let I = 0; I < NDC; I++) {
+    this.du[I] = this.ug[I]; this.dv[I] = this.vg[I]; this.dh[I] = this.heq[I]; this.dth[I] = 0; this.dq[I] = this.qeq[I] * 0.8;
+  }
+  for (let k = 0; k < 12; k++) this.integrate(h0);
+  this.output(h0);
+}
+
+Weather.prototype.spawn = function (initial) {
+  const r = this.rng;
+  const blocking = r() < climate.stagnation;
+  const high = blocking || r() < 0.5;
+  const rad = 35 + r() * 45;
+  this.systems.push({
+    x: initial ? r() * NX * 1.6 - 0.3 * NX : -rad * 0.8, y: NY * (r() * 1.4 - 0.2),
+    sign: high ? 1 : -1, amp: (5 + r() * 7) * (blocking ? 1.3 : 1), r: rad,
+    vx: (blocking ? 0.12 : 1) * (1.0 + r() * 1.2), vy: (r() - 0.5) * 0.4,
+    blocking, age: 0, life: blocking ? 72 + r() * 120 : 1e9
+  });
+};
+Weather.prototype.advance = function () {
+  const r = this.rng;
+  for (const s of this.systems) {
+    s.x += s.vx; s.y += s.vy; s.age++;
+    if (s.blocking && s.age > s.life) { s.blocking = false; s.vx = 1 + r(); }
+  }
+  this.systems = this.systems.filter(s => s.x - s.r * 0.9 < NX);
+  if (--this.next <= 0) { this.spawn(false); this.next = 36 + r() * 60; }
+  if (!this.systems.length) this.spawn(false);
+};
+
+/* 외부 강제력: 종관 지균풍, 지표 가열, 증발 목표 습도 */
+Weather.prototype.forcing = function (hour) {
+  const c = climate, doy = hour / 24, wf = Math.cos(2 * Math.PI * (doy - 15) / 365);
+  const summer = Math.max(0, -wf), winter = Math.max(0, wf);
+  const hod = hour % 24, day = Math.max(0, Math.sin(Math.PI * (hod - 6) / 12));
+  this.season = { wf, summer, winter, day, Tbase: 12 - 13 * wf };
+  const bg = wf > 0 ? 7 * wf * c.monsoon : 5 * wf * c.monsoon;          // 겨울 북서 / 여름 남동 계절풍(지균)
+  const bu = bg * 0.7071 + 2 * (0.5 + 0.5 * winter), bv = bg * 0.7071;
+  const K = 100 / (1.2 * DYN.F * DX);                                    // (hPa/10km칸) → m/s
+  const sys = this.systems, ns = Math.min(sys.length, 16), ex = this.ex, ey = this.ey;
+  for (let k = 0; k < ns; k++) {
+    const s = sys[k], q = 1 / (2 * s.r * s.r);
+    for (let x = 0; x < NX; x++) { const d = x - s.x; ex[k * NX + x] = Math.exp(-d * d * q); }
+    for (let y = 0; y < NY; y++) { const d = y - s.y; ey[k * NY + y] = s.sign * s.amp * Math.exp(-d * d * q); }
+  }
+  const synAt = (fx, fy) => {                  // 10km 격자 좌표에서 기압 편차와 기울기
+    let p = 0, gx = 0, gy = 0;
+    const x0 = Math.min(NX - 1, Math.max(0, Math.round(fx))), y0 = Math.min(NY - 1, Math.max(0, Math.round(fy)));
+    for (let k = 0; k < ns; k++) {
+      const s = sys[k], r2 = s.r * s.r, a = ex[k * NX + x0] * ey[k * NY + y0];
+      p += a; gx -= a * (fx - s.x) / r2; gy -= a * (fy - s.y) / r2;
+    }
+    return [p, gx, gy];
+  };
+  // 10km 표시용 종관 기압
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    let p = 0; for (let k = 0; k < ns; k++) p += ex[k * NX + x] * ey[k * NY + y];
+    this.p[y * NX + x] = p;
+  }
+  const Tb = this.season.Tbase;
+  const qSea = 0.8 * qsat(Tb + 3 * winter - 1 * summer, 1013);
+  for (let Y = 0; Y < ND; Y++) for (let X = 0; X < ND; X++) {
+    const I = Y * ND + X;
+    const [p, gx, gy] = synAt(2 * X + 0.5, 2 * Y + 0.5);
+    // 화면 좌표(y 아래쪽) 북반구 지균풍: 고기압 주위 시계방향
+    this.ug[I] = K * gy + bu; this.vg[I] = -K * gx + bv; this.pc[I] = p;
+    const hi = clamp(p / 8, 0, 1), lo = clamp(-p / 8, 0, 1);
+    this.wsyn[I] = 0.015 * lo * lo - 0.006 * hi;                   // 저기압 상승 / 고기압 침강 m/s
+    const land = this.land[I], cl = this.cldC[I];
+    const sun = day * (1 - 0.75 * cl);
+    // 육지: 낮 가열·밤 복사냉각(맑을수록 강함), 겨울엔 차갑고 여름엔 따뜻한 계절 편차. 높은 곳은 가열 효과 큼
+    const elevAmp = 1 + this.zr[I] / 1500;
+    const diurnal = (9 * sun - 4.5 * (1 - day) * (1 - 0.7 * cl)) / (8 * 3600);
+    const seasonal = (-3.5 * winter + 2.5 * summer) / DYN.TAU_TH;
+    this.Q[I] = land * (diurnal * elevAmp + seasonal);
+    this.qeq[I] = qSea * (1 - 0.2 * land);
+  }
+};
+
+/* 한 시간 동안 역학 적분 (부분 스텝), 시간 평균 바람과 강수 누적 */
+Weather.prototype.integrate = function (hour) {
+  let mx = 0;
+  for (let I = 0; I < NDC; I++) { const s = Math.abs(this.du[I]) + Math.abs(this.dv[I]); if (s > mx) mx = s; }
+  const cg = Math.sqrt(DYN.GR * DYN.H0);
+  const n = Math.max(4, Math.ceil(3600 * (mx + 1.2 * cg) / (0.85 * DXD))), dt = 3600 / n;
+  // 포화 수증기량은 한 시간 동안 고정 (지수함수 계산 절약)
+  for (let I = 0; I < NDC; I++) this.qsC[I] = qsat(this.season.Tbase + this.dth[I] - 0.0065 * this.zr[I], 1013 - 0.12 * this.zr[I]);
+  this.um.fill(0); this.vm.fill(0); this.rain.fill(0);
+  for (let k = 0; k < n; k++) this.step(dt);
+  for (let I = 0; I < NDC; I++) { this.um[I] /= n; this.vm[I] /= n; this.rain[I] /= 3600; }
+  this.nDyn = n;
+};
+
+Weather.prototype.step = function (dt) {
+  const N = ND, u = this.du, v = this.dv, h = this.dh, th = this.dth, q = this.dq, zs = this.zs;
+  const nu = this.nu, nv = this.nv, nh = this.nh, nth = this.nth, nq = this.nq;
+  const ou = this.ou, ov = this.ov, oth = this.oth, oq = this.oq;
+  const c = dt / DXD, s = this.season;
+  // 1) 연속방정식: 플럭스형 upwind
+  nh.set(h);
+  for (let Y = 0; Y < N; Y++) for (let X = 0; X < N - 1; X++) {
+    const i = Y * N + X, j = i + 1, f = 0.5 * (u[i] + u[j]) * c, F = (f > 0 ? h[i] : h[j]) * f;
+    nh[i] -= F; nh[j] += F;
+  }
+  for (let Y = 0; Y < N - 1; Y++) for (let X = 0; X < N; X++) {
+    const i = Y * N + X, j = i + N, f = 0.5 * (v[i] + v[j]) * c, F = (f > 0 ? h[i] : h[j]) * f;
+    nh[i] -= F; nh[j] += F;
+  }
+  for (let I = 0; I < NDC; I++) { let x = nh[I] + (this.heq[I] - nh[I]) * dt / DYN.TAU_H; nh[I] = x < DYN.HMIN ? DYN.HMIN : x; }
+  // 2) 반라그랑지 이류 (u, v, θ', q)
+  for (let Y = 0; Y < N; Y++) for (let X = 0; X < N; X++) {
+    const I = Y * N + X;
+    let x = X - u[I] * c, y = Y - v[I] * c;
+    x = x < 0 ? 0 : x > N - 1.0001 ? N - 1.0001 : x; y = y < 0 ? 0 : y > N - 1.0001 ? N - 1.0001 : y;
+    const ix = x | 0, iy = y | 0, fx = x - ix, fy = y - iy, a = iy * N + ix;
+    const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+    nu[I] = u[a] * w00 + u[a + 1] * w10 + u[a + N] * w01 + u[a + N + 1] * w11;
+    nv[I] = v[a] * w00 + v[a + 1] * w10 + v[a + N] * w01 + v[a + N + 1] * w11;
+    nth[I] = th[a] * w00 + th[a + 1] * w10 + th[a + N] * w01 + th[a + N + 1] * w11;
+    nq[I] = q[a] * w00 + q[a + 1] * w10 + q[a + N] * w01 + q[a + N + 1] * w11;
+  }
+  // 3) 힘: 기압경도(지형+경계층 두께+기온), 코리올리(비지균 성분 회전), 마찰, 점성 / 4) 열·수증기
+  const b = DYN.G / DYN.TH0, cf = Math.cos(DYN.F * dt), sf = Math.sin(DYN.F * dt), kv = DYN.NU * dt / (DXD * DXD);
+  const Tb = s.Tbase, precip = climate.precip;
+  for (let Y = 0; Y < N; Y++) for (let X = 0; X < N; X++) {
+    const I = Y * N + X;
+    const l = X > 0 ? I - 1 : I, r = X < N - 1 ? I + 1 : I, t = Y > 0 ? I - N : I, d = Y < N - 1 ? I + N : I;
+    const dxs = ((X > 0) + (X < N - 1)) * DXD, dys = ((Y > 0) + (Y < N - 1)) * DXD;
+    const ex = (nh[r] + zs[r] - nh[l] - zs[l]) / dxs, ey = (nh[d] + zs[d] - nh[t] - zs[t]) / dys;
+    const tx = (nth[r] - nth[l]) / dxs, ty = (nth[d] - nth[t]) / dys;
+    let uu = nu[I] + (-DYN.GR * ex + 0.5 * nh[I] * b * tx) * dt + kv * (nu[l] + nu[r] + nu[t] + nu[d] - 4 * nu[I]);
+    let vv = nv[I] + (-DYN.GR * ey + 0.5 * nh[I] * b * ty) * dt + kv * (nv[l] + nv[r] + nv[t] + nv[d] - 4 * nv[I]);
+    const ua = uu - this.ug[I], va = vv - this.vg[I];
+    uu = this.ug[I] + ua * cf - va * sf; vv = this.vg[I] + ua * sf + va * cf;
+    const fr = 1 / (1 + this.cd[I] * Math.sqrt(uu * uu + vv * vv) * dt / nh[I]);
+    uu *= fr; vv *= fr;
+    // 열: 지표 가열·냉각과 완화
+    let T2 = nth[I] + (this.Q[I] - nth[I] / DYN.TAU_TH) * dt;
+    // 수증기: 증발(바다 빠름), 응결 → 비
+    let qq = nq[I] + (this.qeq[I] - nq[I]) * dt / (this.land[I] > 0.5 ? 86400 : 12 * 3600);
+    const div = (u[r] - u[l]) / dxs + (v[d] - v[t]) / dys;
+    // 상승기류: 수렴 + 지형 상승 + 종관 상승 + (여름 낮 육지) 대류
+    const w = -nh[I] * div + (uu * (zs[r] - zs[l]) / dxs + vv * (zs[d] - zs[t]) / dys) + this.wsyn[I]
+            + 0.06 * this.land[I] * (T2 > 0 ? T2 : 0) * s.day;
+    const qs = this.qsC[I], rh = qq / qs;
+    let cond = Math.max(0, w) * qq / DYN.HQ * clamp((rh - 0.7) / 0.3, 0, 1) * precip + Math.max(0, qq - qs) / 1800;
+    if (cond * dt > qq) cond = qq / dt;
+    qq -= cond * dt;
+    T2 += cond * dt * 2500;                       // 응결 잠열 (L/cp ≈ 2500 K)
+    this.rain[I] += 1.2 * nh[I] * cond * 3600 * dt;   // mm/h × s
+    this.rh[I] = rh;
+    // 경계 완충대: 바깥 대기(종관장)로 완화
+    const e = Math.min(X, Y, N - 1 - X, N - 1 - Y);
+    if (e < DYN.SPONGE) {
+      const wgt = (DYN.SPONGE - e) / DYN.SPONGE * 0.08;
+      uu += (this.ug[I] - uu) * wgt; vv += (this.vg[I] - vv) * wgt;
+      T2 -= T2 * wgt; qq += (this.qeq[I] - qq) * wgt;
+    }
+    ou[I] = uu; ov[I] = vv; oth[I] = T2; oq[I] = qq;
+    this.um[I] += uu; this.vm[I] += vv;
+  }
+  for (let Y = 0; Y < N; Y++) for (let X = 0; X < N; X++) {
+    const I = Y * N + X, e = Math.min(X, Y, N - 1 - X, N - 1 - Y);
+    if (e < DYN.SPONGE) nh[I] += (this.heq[I] - nh[I]) * (DYN.SPONGE - e) / DYN.SPONGE * 0.08;
+  }
+  u.set(ou); v.set(ov); h.set(nh); th.set(oth); q.set(oq);
+};
+
+/* 20km → 10km 출력 */
+Weather.prototype.output = function (hour) {
+  const s = this.season, N = ND;
+  for (let I = 0; I < NDC; I++) this.cldC[I] = clamp((this.rh[I] - 0.6) / 0.4, 0, 1) * 0.85 + Math.min(0.15, this.rain[I] / 3);
+  if (!this._ii) {               // 10km 칸 → 20km 격자 보간 인덱스·가중치 (고정)
+    this._ii = new Int32Array(NC); this._w = new Float64Array(NC * 4);
+    for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+      let X = (x + 0.5) / 2 - 0.5, Y = (y + 0.5) / 2 - 0.5;
+      X = X < 0 ? 0 : X > N - 1.0001 ? N - 1.0001 : X; Y = Y < 0 ? 0 : Y > N - 1.0001 ? N - 1.0001 : Y;
+      const ix = X | 0, iy = Y | 0, fx = X - ix, fy = Y - iy, i = y * NX + x;
+      this._ii[i] = iy * N + ix;
+      this._w[i * 4] = (1 - fx) * (1 - fy); this._w[i * 4 + 1] = fx * (1 - fy); this._w[i * 4 + 2] = (1 - fx) * fy; this._w[i * 4 + 3] = fx * fy;
+    }
+  }
+  const II = this._ii, WW = this._w;
+  let w0, w1, w2, w3, a0;
+  const samp = a => a[a0] * w0 + a[a0 + 1] * w1 + a[a0 + N] * w2 + a[a0 + N + 1] * w3;
+  const T = this.T, rho = 1.2;
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const i = y * NX + x;
+    a0 = II[i]; w0 = WW[i * 4]; w1 = WW[i * 4 + 1]; w2 = WW[i * 4 + 2]; w3 = WW[i * 4 + 3];
+    this.u[i] = samp(this.um); this.v[i] = samp(this.vm);
+    this.P[i] = Math.max(0, samp(this.rain));
+    const cl = samp(this.cldC), th = samp(this.dth), h = samp(this.dh), zs = samp(this.zs);
+    this.cloud[i] = cl; this.sun[i] = s.day * (1 - 0.75 * cl);
+    this.Tc[i] = s.Tbase + th - 0.0065 * Math.max(0, T.elev[i]);
+    const hi = clamp(this.p[i] / 8, 0, 1);
+    // 혼합고: 낮 가열·기온 편차로 깊어지고, 밤·고기압 침강으로 얕아짐
+    this.H[i] = clamp((230 + (800 + 500 * s.summer) * s.day * (1 - 0.4 * cl) + 90 * Math.max(0, th)) * climate.mixing * (1 - 0.5 * hi), 80, 2600);
+    // 표시용 기압: 종관 + 경계층 두께에 의한 국지 기압 − 기온에 의한 열적 저기압
+    this.p[i] += rho * DYN.GR * (h + zs - DYN.H0) / 100 - rho * DYN.G * h * th / DYN.TH0 / 100;
+  }
+};
+
+Weather.prototype.update = function (hour) {
+  this.advance();
+  this.forcing(hour);
+  this.integrate(hour);
+  this.output(hour);
+};
+
+/* ---------- 수송: 이류 + 확산 (두 물질 동시) ---------- */
+function transport(a, b, oa, ob, u, v, dt) {
+  const c = dt / DX, k = PHYS.KH * dt / (DX * DX);
+  let lost = 0;
+  oa.set(a); ob.set(b);
+  for (let y = 0; y < NY; y++) {
+    const r = y * NX;
+    for (let x = 0; x < NX - 1; x++) {
+      const i = r + x, j = i + 1, f = 0.5 * (u[i] + u[j]) * c;
+      const fa = (f > 0 ? a[i] * f : a[j] * f) + k * (a[i] - a[j]);
+      const fb = (f > 0 ? b[i] * f : b[j] * f) + k * (b[i] - b[j]);
+      oa[i] -= fa; oa[j] += fa; ob[i] -= fb; ob[j] += fb;
+    }
+    let f = u[r] * c;
+    if (f < 0) { const fa = -f * a[r], fb = -f * b[r]; oa[r] -= fa; ob[r] -= fb; lost += fa + fb; }
+    const e = r + NX - 1; f = u[e] * c;
+    if (f > 0) { const fa = f * a[e], fb = f * b[e]; oa[e] -= fa; ob[e] -= fb; lost += fa + fb; }
+  }
+  for (let y = 0; y < NY - 1; y++) {
+    const r = y * NX;
+    for (let x = 0; x < NX; x++) {
+      const i = r + x, j = i + NX, f = 0.5 * (v[i] + v[j]) * c;
+      const fa = (f > 0 ? a[i] * f : a[j] * f) + k * (a[i] - a[j]);
+      const fb = (f > 0 ? b[i] * f : b[j] * f) + k * (b[i] - b[j]);
+      oa[i] -= fa; oa[j] += fa; ob[i] -= fb; ob[j] += fb;
+    }
+  }
+  for (let x = 0; x < NX; x++) {
+    let f = v[x] * c;
+    if (f < 0) { const fa = -f * a[x], fb = -f * b[x]; oa[x] -= fa; ob[x] -= fb; lost += fa + fb; }
+    const t = (NY - 1) * NX + x; f = v[t] * c;
+    if (f > 0) { const fa = f * a[t], fb = f * b[t]; oa[t] -= fa; ob[t] -= fb; lost += fa + fb; }
+  }
+  for (let i = 0; i < NC; i++) { a[i] = oa[i] > 0 ? oa[i] : 0; b[i] = ob[i] > 0 ? ob[i] : 0; }
+  return lost;
+}
+
+/* ---------- 시뮬레이션 ---------- */
+// 빠른 평가: 1년에 고르게 퍼진 8구간 × 4일(각 구간 앞 30시간 예열). 1년 평가와 순위 상관 약 0.8
+const FAST = { STARTS: [0, 1, 2, 3, 4, 5, 6, 7].map(k => Math.round(24 * (10 + k * 45.6))), WARMUP: 30, WEEK: 96 };
+
+function Sim(o) {
+  o = o || {};
+  this.seed = (o.seed >>> 0) || 1;
+  this.T = generateTerrain(this.seed);
+  this.factories = new Uint8Array(NC);
+  const F = () => new Float32Array(NC);
+  this.mS2 = F(); this.mS4 = F(); this.ox = F(); this.tmp = F(); this.tmp2 = F();  // kg S
+  this.cSO2 = F();                                                                  // 지금 농도 µg/m³
+  this.sumC = F(); this.sumW = F(); this.depS = F(); this.dayAcc = F(); this.exDayAmt = F();
+  this.exDays = new Uint16Array(NC);
+  this._f2 = F(); this._f4 = F(); this._kg = F(); this._ka = F();
+  this.series = { air: new Float32Array(HOURS), dep: new Float32Array(HOURS) };
+  this._avg = F(); this._win = F(); this._depY = F(); this._pen = F();
+  this.accOn = true;
+  this.reset();
+}
+/* 누적값(평균·침착·초과일) 초기화 */
+Sim.prototype.resetAcc = function () {
+  for (const a of [this.sumC, this.sumW, this.depS, this.dayAcc, this.exDayAmt]) a.fill(0);
+  this.exDays.fill(0);
+  this.nH = 0; this.nW = 0; this.nDays = 0; this.dayH = 0;
+  this.emitted = 0; this.deposited = 0; this.outflow = 0;
+  this.series.air.fill(0); this.series.dep.fill(0);
+};
+/* 대기 상태 초기화 (h0 시각부터 시작) */
+Sim.prototype.resetState = function (h0) {
+  this.hour = h0 || 0;
+  this.W = new Weather(this.T, this.seed, this.hour);
+  for (const a of [this.mS2, this.mS4, this.cSO2, this.dayAcc]) a.fill(0);
+  this.ox.fill(1); this.dayH = 0;
+};
+Sim.prototype.reset = function () { this.resetAcc(); this.resetState(0); };
+
+Sim.isWinterHour = h => { const d = h / 24; return d < 90 || d >= 273; };   // 10월~3월 (UNECE 겨울 반년)
+Sim.prototype.stepHour = function () {
+  if (this.hour >= HOURS) return false;
+  const W = this.W, T = this.T;
+  W.update(this.hour);
+  const u = W.u, v = W.v, H = W.H, P = W.P;
+  let mx = 0;
+  for (let i = 0; i < NC; i++) { const s = Math.abs(u[i]) + Math.abs(v[i]); if (s > mx) mx = s; }
+  const nSub = Math.max(1, Math.ceil(mx * 3600 / (0.85 * DX))), dt = 3600 / nSub;
+  const eS = PHYS.EMIS * 0.5 * dt / 3600;          // kg S / 공장 / 소스텝
+  const decOx = 1 - Math.exp(-dt / PHYS.OX_TAU);
+  const f2 = this._f2, f4 = this._f4, kgA = this._kg, kaA = this._ka;
+  for (let i = 0; i < NC; i++) {
+    const pw = P[i] > 0 ? Math.pow(P[i], PHYS.WET_EXP) : 0;
+    f2[i] = 1 - Math.exp(-(PHYS.VD_SO2[T.lc[i]] / H[i] + PHYS.WET_SO2 * pw) * dt);
+    f4[i] = 1 - Math.exp(-(PHYS.VD_SO4 / H[i] + PHYS.WET_SO4 * pw) * dt);
+    kgA[i] = PHYS.K_GAS * W.sun[i] * dt; kaA[i] = PHYS.K_AQ * W.cloud[i] * dt;
+  }
+  const src = []; for (let i = 0; i < NC; i++) if (this.factories[i]) src.push(i);
+  const mS2 = this.mS2, mS4 = this.mS4, oxA = this.ox, depS = this.depS, acc = this.accOn;
+  let emitted = 0, deposited = 0, outflow = 0;
+  for (let s = 0; s < nSub; s++) {
+    for (const i of src) { const e = this.factories[i] * eS; mS2[i] += e; emitted += e; }
+    outflow += transport(mS2, mS4, this.tmp, this.tmp2, u, v, dt);
+    for (let i = 0; i < NC; i++) {
+      let s2 = mS2[i], s4 = mS4[i], ox = oxA[i];
+      if (s2 > 0) {
+        const xg = kgA[i], xa = kaA[i] * ox / (ox + PHYS.OX_HALF), x = xg + xa;
+        if (x > 0) {
+          const conv = s2 * (x < 0.02 ? x * (1 - x * (0.5 - x / 6)) : 1 - Math.exp(-x));
+          s2 -= conv; s4 += conv;
+          ox -= conv * (xa / x) / PHYS.OX_CAP; if (ox < 0) ox = 0;
+        }
+      }
+      ox += (1 - ox) * decOx;
+      const l2 = s2 * f2[i], l4 = s4 * f4[i];
+      s2 -= l2; s4 -= l4; deposited += l2 + l4;
+      if (acc) depS[i] += l2 + l4;
+      mS2[i] = s2; mS4[i] = s4; oxA[i] = ox;
+    }
+  }
+  const k = 2e9 / AREA, win = Sim.isWinterHour(this.hour);
+  let air = 0;
+  for (let i = 0; i < NC; i++) {
+    const c2 = mS2[i] * k / H[i];
+    this.cSO2[i] = c2; air += mS2[i] + mS4[i];
+    if (acc) { this.sumC[i] += c2; if (win) this.sumW[i] += c2; this.dayAcc[i] += c2; }
+  }
+  if (acc) {
+    this.emitted += emitted; this.deposited += deposited; this.outflow += outflow;
+    this.nH++; if (win) this.nW++;
+    if (++this.dayH === 24) {                  // 일평균이 WHO 24시간 지침(40 µg/m³)을 넘은 만큼 누적
+      for (let i = 0; i < NC; i++) {
+        const d = this.dayAcc[i] / 24;
+        if (d > PEN.LIMIT_DAY) { this.exDayAmt[i] += d - PEN.LIMIT_DAY; this.exDays[i]++; }
+        this.dayAcc[i] = 0;
+      }
+      this.dayH = 0; this.nDays++;
+    }
+    this.series.air[this.hour] = air * 2 / 1e3;           // t SO2 환산
+    this.series.dep[this.hour] = this.deposited / 1e6;    // kt S
+  }
+  this.hour++;
+  return true;
+};
+Sim.prototype.avgSO2 = function () {
+  const h = Math.max(1, this.nH); for (let i = 0; i < NC; i++) this._avg[i] = this.sumC[i] / h; return this._avg;
+};
+Sim.prototype.winSO2 = function () {
+  const h = Math.max(1, this.nW); for (let i = 0; i < NC; i++) this._win[i] = this.nW ? this.sumW[i] / h : 0; return this._win;
+};
+Sim.prototype.depYear = function () {                     // 연환산 침착 kg S/ha/yr
+  const sc = HOURS / Math.max(1, this.nH); for (let i = 0; i < NC; i++) this._depY[i] = this.depS[i] * sc / 1e4; return this._depY;
+};
+Sim.prototype.airborne = function () { let a = 0; for (let i = 0; i < NC; i++) a += this.mS2[i] + this.mS4[i]; return a; };
+Sim.prototype.massError = function () {
+  return this.emitted > 0 ? (this.emitted - this.airborne() - this.deposited - this.outflow) / this.emitted * 100 : 0;
+};
+/* 벌점: 기준을 넘으면 넘은 양의 제곱까지 더해져 급격히 커짐. 1년이 안 됐으면 연환산 추정 */
+Sim.prototype.penalty = function () {
+  const avg = this.avgSO2(), win = this.winSO2(), dep = this.depYear(), T = this.T, m = this._pen;
+  const dayScale = this.nDays ? 365 / this.nDays : 0;
+  const t = { over: 0, winter: 0, daily: 0, acid: 0, load: 0, out: 0 };
+  let nOver = 0, exDays = 0;
+  for (let i = 0; i < NC; i++) {
+    if (T.lc[i] === LC.SEA) { m[i] = 0; continue; }
+    const o = Math.max(0, avg[i] - PEN.LIMIT_AVG), ow = Math.max(0, win[i] - PEN.LIMIT_WIN);
+    const dd = this.exDayAmt[i] * dayScale, a = Math.max(0, dep[i] - PEN.LIMIT_DEP) / PEN.LIMIT_DEP;
+    const pO = PEN.W_OVER * (o + PEN.SQ * o * o), pW = PEN.W_WIN * (ow + PEN.SQ * ow * ow);
+    const pD = PEN.W_DAY * dd, pA = PEN.W_DEP * (a + a * a), pL = PEN.W_LOAD * avg[i];
+    t.over += pO; t.winter += pW; t.daily += pD; t.acid += pA; t.load += pL;
+    m[i] = pO + pW + pD + pA + pL;
+    if (o > 0 || ow > 0 || dd > 0 || a > 0) nOver++;
+    exDays += this.exDays[i] * dayScale;
+  }
+  t.out = PEN.W_OUT * this.outflow * HOURS / Math.max(1, this.nH) / 1e6;
+  let total = 0; for (const k in t) total += t[k];
+  return { total, terms: t, nOver, exceedDays: exDays, hours: this.nH, map: m };
+};
+Sim.prototype.summary = function () {
+  const p = this.penalty();
+  return { total: p.total, terms: p.terms, nOver: p.nOver, exceedDays: p.exceedDays, hours: p.hours,
+           penaltyMap: Float32Array.from(p.map), avgSO2: Float32Array.from(this.avgSO2()), depYear: Float32Array.from(this.depYear()) };
+};
+/* AI용 표준 인터페이스: 배치 → 시뮬레이션 → 벌점
+   mode 'full': 1월 1일부터 1년 (정확, 약 20~30초)
+   mode 'fast': 8구간 × 4일 표본 (약 3초, 탐색·학습 데이터용 근사) */
+Sim.prototype.evaluate = function (factories, opts) {
+  opts = opts || {};
+  this.factories.set(factories);
+  if (opts.mode === 'fast') {
+    this.resetAcc();
+    FAST.STARTS.forEach((h0, k) => {
+      this.resetState(h0);
+      this.accOn = false; for (let j = 0; j < FAST.WARMUP; j++) this.stepHour();
+      this.accOn = true; for (let j = 0; j < FAST.WEEK; j++) this.stepHour();
+      if (opts.onProgress) opts.onProgress((k + 1) / FAST.STARTS.length);
+    });
+    return this.summary();
+  }
+  this.reset();
+  const hours = opts.hours || HOURS;
+  while (this.hour < hours) { this.stepHour(); if (opts.onProgress && this.hour % 96 === 0) opts.onProgress(this.hour / hours); }
+  const s = this.summary(); s.massErrorPct = this.massError(); return s;
+};
+/* 상태 주고받기 (Worker에서 계산한 1년을 화면으로 가져올 때) */
+Sim.prototype.exportState = function () {
+  const W = this.W, cp = a => Float32Array.from(a);
+  return { hour: this.hour, nH: this.nH, nW: this.nW, nDays: this.nDays,
+           mS2: cp(this.mS2), mS4: cp(this.mS4), ox: cp(this.ox), cSO2: cp(this.cSO2), sumC: cp(this.sumC), sumW: cp(this.sumW),
+           depS: cp(this.depS), exDayAmt: cp(this.exDayAmt), exDays: Uint16Array.from(this.exDays),
+           emitted: this.emitted, deposited: this.deposited, outflow: this.outflow,
+           series: { air: cp(this.series.air), dep: cp(this.series.dep) },
+           W: { u: cp(W.u), v: cp(W.v), p: cp(W.p), P: cp(W.P), H: cp(W.H), cloud: cp(W.cloud), sun: cp(W.sun), Tc: cp(W.Tc), systems: W.systems.map(o => Object.assign({}, o)) } };
+};
+Sim.prototype.importState = function (st) {
+  for (const k of ['mS2', 'mS4', 'ox', 'cSO2', 'sumC', 'sumW', 'depS', 'exDayAmt', 'exDays']) this[k].set(st[k]);
+  this.hour = st.hour; this.nH = st.nH; this.nW = st.nW; this.nDays = st.nDays; this.dayH = 0;
+  this.emitted = st.emitted; this.deposited = st.deposited; this.outflow = st.outflow;
+  this.series.air.set(st.series.air); this.series.dep.set(st.series.dep);
+  for (const k of ['u', 'v', 'p', 'P', 'H', 'cloud', 'sun', 'Tc']) this.W[k].set(st.W[k]);
+  this.W.systems = st.W.systems;
+};
+
+/* ---------- AI 인터페이스 ----------
+   관측(observe) → 정책이 칸마다 점수(logits) → 공장 N개 배치 → evaluate가 벌점 계산.
+   학습된 모델(ONNX)은 공장을 '하나씩' 놓음(rollout): 지금까지의 배치를 9번째 채널로 보고 다음 칸을 고름.
+   그래야 서로 몰리지 않게 스스로 판단할 수 있음.
+     입력 grid    [1, 9, 64, 64]  (아래 CHANNELS 순서, 마지막 채널 = 현재 배치)
+     입력 globals [1, 6]          (아래 GLOBALS 순서, 마지막 = 남은 공장 수/50)
+     출력 logits  [1, 4096]       (칸 번호 = y*64 + x, 높을수록 다음 공장을 놓고 싶은 칸) */
+const AI = {
+  N_FACTORIES: 24,
+  N_MIN: 8, N_MAX: 48,
+  PER_CELL: 2,
+  CHANNELS: ['고도/2500', '바다', '숲', '높은 산', '배치 가능', '경사×20', '해안까지 거리/20칸', '지도 가장자리까지 거리/32칸', '현재 배치(공장 수/2)'],
+  GLOBALS: ['계절풍 세기', '고기압 정체 빈도', '강수 강도', '혼합고 계수', '전체 공장 수/50', '남은 공장 수/50'],
+  observe(sim, nFac, layout) {
+    const T = sim.T, C = AI.CHANNELS.length, g = new Float32Array(C * NC);
+    // 해안까지 거리 (BFS, 칸 단위)
+    const dist = new Float32Array(NC).fill(1e9), q = [];
+    for (let i = 0; i < NC; i++) if (T.lc[i] === LC.SEA) { dist[i] = 0; q.push(i); }
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], x = i % NX, y = (i / NX) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= NX || yy >= NY) continue;
+        const j = yy * NX + xx; if (dist[j] > dist[i] + 1) { dist[j] = dist[i] + 1; q.push(j); }
+      }
+    }
+    for (let i = 0; i < NC; i++) {
+      const x = i % NX, y = (i / NX) | 0;
+      g[0 * NC + i] = Math.max(0, T.elev[i]) / 2500;
+      g[1 * NC + i] = T.lc[i] === LC.SEA ? 1 : 0;
+      g[2 * NC + i] = T.lc[i] === LC.FOREST ? 1 : 0;
+      g[3 * NC + i] = T.lc[i] === LC.HIGH ? 1 : 0;
+      g[4 * NC + i] = T.cap[i] > 0 ? 1 : 0;
+      g[5 * NC + i] = Math.min(1, Math.hypot(T.dhx[i], T.dhy[i]) * 20);
+      g[6 * NC + i] = Math.min(1, (dist[i] > 1e8 ? 64 : dist[i]) / 20);
+      g[7 * NC + i] = Math.min(x, y, NX - 1 - x, NY - 1 - y) / 32;
+      g[8 * NC + i] = layout ? layout[i] / 2 : 0;
+    }
+    const n = nFac || AI.N_FACTORIES;
+    let placed = 0; if (layout) for (let i = 0; i < NC; i++) placed += layout[i];
+    const globals = new Float32Array([climate.monsoon, climate.stagnation, climate.precip, climate.mixing, n / 50, (n - placed) / 50]);
+    const mask = new Uint8Array(NC); for (let i = 0; i < NC; i++) mask[i] = T.cap[i] > 0 ? 1 : 0;
+    return { grid: g, globals, mask, shape: [1, C, NY, NX], nFac: n };
+  },
+  /* 점수 → 배치. greedy면 높은 칸부터, 아니면 softmax 확률로 뽑음.
+     같은 칸에 또 놓을수록(stack) 주변에 이미 공장이 있을수록(repel) 점수를 깎음 */
+  decode(logits, obs, opts) {
+    opts = opts || {};
+    const n = opts.nFac || obs.nFac, per = opts.perCell || AI.PER_CELL, temp = opts.temperature || 1;
+    const greedy = !!opts.greedy, rng = opts.rng || Math.random, repel = opts.repel || 0, rad = opts.radius || 3;
+    const L = Float64Array.from(logits), f = new Uint8Array(NC);
+    for (let k = 0; k < n; k++) {
+      let best = -1, bv = -Infinity, sum = 0, mx = -Infinity;
+      for (let i = 0; i < NC; i++) if (obs.mask[i] && f[i] < per && L[i] > mx) mx = L[i];
+      if (mx === -Infinity) break;
+      if (greedy) {
+        for (let i = 0; i < NC; i++) if (obs.mask[i] && f[i] < per && L[i] > bv) { bv = L[i]; best = i; }
+      } else {
+        const p = new Float64Array(NC);
+        for (let i = 0; i < NC; i++) if (obs.mask[i] && f[i] < per) { p[i] = Math.exp((L[i] - mx) / temp); sum += p[i]; }
+        let r = rng() * sum;
+        for (let i = 0; i < NC; i++) { r -= p[i]; if (r <= 0 && p[i] > 0) { best = i; break; } }
+        if (best < 0) for (let i = NC - 1; i >= 0; i--) if (p[i] > 0) { best = i; break; }
+      }
+      f[best]++;
+      L[best] -= opts.stack != null ? opts.stack : 1.0;
+      if (repel > 0) {
+        const bx = best % NX, by = (best / NX) | 0, R = Math.ceil(rad * 2.5);
+        for (let y = Math.max(0, by - R); y <= Math.min(NY - 1, by + R); y++)
+          for (let x = Math.max(0, bx - R); x <= Math.min(NX - 1, bx + R); x++) {
+            const d2 = (x - bx) * (x - bx) + (y - by) * (y - by);
+            L[y * NX + x] -= repel * Math.exp(-d2 / (2 * rad * rad));
+          }
+      }
+    }
+    return f;
+  },
+  /* 하나씩 놓기: 매번 현재 배치를 넣고 점수를 다시 받아 한 칸을 고름. logitsFn이 Promise를 돌려줘도 됨 */
+  async rollout(logitsFn, obs, opts) {
+    opts = opts || {};
+    const n = opts.nFac || obs.nFac, per = opts.perCell || AI.PER_CELL, rng = opts.rng || Math.random, temp = opts.temperature || 1;
+    const f = new Uint8Array(NC), g = obs.grid;
+    for (let k = 0; k < n; k++) {
+      for (let i = 0; i < NC; i++) g[8 * NC + i] = f[i] / 2;
+      obs.globals[4] = n / 50; obs.globals[5] = (n - k) / 50;
+      const L = await logitsFn(obs, k);
+      let best = -1, bv = -Infinity;
+      if (opts.greedy === true) {
+        for (let i = 0; i < NC; i++) if (obs.mask[i] && f[i] < per && L[i] > bv) { bv = L[i]; best = i; }
+      } else {
+        let mx = -Infinity, sum = 0; const p = new Float64Array(NC);
+        for (let i = 0; i < NC; i++) if (obs.mask[i] && f[i] < per && L[i] > mx) mx = L[i];
+        for (let i = 0; i < NC; i++) if (obs.mask[i] && f[i] < per) { p[i] = Math.exp((L[i] - mx) / temp); sum += p[i]; }
+        let r = rng() * sum; for (let i = 0; i < NC; i++) { r -= p[i]; if (r <= 0 && p[i] > 0) { best = i; break; } }
+      }
+      if (best < 0) break;
+      f[best]++;
+      if (opts.onStep) await opts.onStep(k + 1, f, best);
+    }
+    for (let i = 0; i < NC; i++) g[8 * NC + i] = f[i] / 2;
+    obs.globals[5] = 0;
+    return f;
+  },
+  /* 학습 없이 쓸 수 있는 기본 정책들 (같은 입출력 규격) */
+  policies: {
+    random: { name: '무작위', run: (obs, rng) => AI.decode(new Float32Array(NC), obs, { rng, perCell: AI.PER_CELL }) },
+    rule: {
+      name: '규칙 기반',
+      // 평지·농지 선호, 숲·경사·고지 회피, 해안·가장자리에서 조금 떨어진 내륙, 서로 멀리
+      logits(obs) {
+        const g = obs.grid, L = new Float32Array(NC);
+        for (let i = 0; i < NC; i++) {
+          L[i] = -2.0 * g[0 * NC + i] - 1.2 * g[2 * NC + i] - 1.5 * g[5 * NC + i]
+               - 1.0 * Math.abs(g[6 * NC + i] - 0.25) - 1.0 * Math.max(0, 0.15 - g[7 * NC + i]) * 6;
+        }
+        return L;
+      },
+      run(obs) { return AI.decode(this.logits(obs), obs, { greedy: true, repel: 2.5, radius: 4 }); }
+    }
+  },
+  /* 시뮬레이터를 직접 돌려가며 개선하는 탐색 (학습 없는 최적화 기준선, 나중에 학습 데이터의 '정답'으로도 씀) */
+  search(sim, start, opts) {
+    opts = opts || {};
+    const rng = opts.rng || mulberry32(1234), iters = opts.iters || 30, T = sim.T, per = AI.PER_CELL;
+    let cur = Uint8Array.from(start), curS = sim.evaluate(cur, { mode: 'fast' }).total;
+    const cells = []; for (let i = 0; i < NC; i++) if (T.cap[i]) cells.push(i);
+    if (opts.onStep) opts.onStep(0, curS, cur, true, -1, -1, curS);
+    for (let it = 1; it <= iters; it++) {
+      const cand = Uint8Array.from(cur);
+      const occ = []; for (let i = 0; i < NC; i++) if (cand[i]) occ.push(i);
+      const from = occ[Math.floor(rng() * occ.length)];
+      let to = -1;
+      for (let tries = 0; tries < 200 && to < 0; tries++) {
+        let j;
+        if (rng() < 0.5) {               // 근처로 옮기기
+          const fx = from % NX, fy = (from / NX) | 0;
+          const x = Math.min(NX - 1, Math.max(0, fx + Math.round((rng() - 0.5) * 10))), y = Math.min(NY - 1, Math.max(0, fy + Math.round((rng() - 0.5) * 10)));
+          j = y * NX + x;
+        } else j = cells[Math.floor(rng() * cells.length)];   // 멀리 옮기기
+        if (j !== from && T.cap[j] && cand[j] < per) to = j;
+      }
+      if (to < 0) continue;
+      cand[from]--; cand[to]++;
+      const s = sim.evaluate(cand, { mode: 'fast' }).total;
+      const ok = s < curS;
+      if (ok) { cur = cand; curS = s; }
+      if (opts.onStep) opts.onStep(it, curS, cur, ok, from, to, s);
+    }
+    return { layout: cur, score: curS };
+  }
+};
+
+root.AirSim = { CONFIG, LC, PHYS, PEN, DYN, FAST, AI, climate, mulberry32, generateTerrain, Weather, Sim };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+
+<!-- ============================================================
+     APP: 화면
+     ============================================================ -->
+<script>
+(function () {
+'use strict';
+const A = window.AirSim, NX = A.CONFIG.NX, NY = A.CONFIG.NY, NC = NX * NY, HOURS = A.CONFIG.HOURS;
+const $ = id => document.getElementById(id);
+const nf = (v, d = 1) => Number(v).toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/* ---------- 색 ---------- */
+const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+function ramp(stops) {
+  const s = stops.map(([t, c]) => [t, hex(c)]);
+  return t => {
+    if (t <= s[0][0]) return s[0][1];
+    for (let k = 0; k < s.length - 1; k++) if (t <= s[k + 1][0]) {
+      const f = (t - s[k][0]) / (s[k + 1][0] - s[k][0]);
+      return [0, 1, 2].map(c => s[k][1][c] + (s[k + 1][1][c] - s[k][1][c]) * f);
+    }
+    return s[s.length - 1][1];
+  };
+}
+const landRamp = ramp([[0, '#d4ecc8'], [0.25, '#e6e8bf'], [0.5, '#ecdcc4'], [0.72, '#ddd3e6'], [1, '#e9e4f0']]);
+const seaRamp = ramp([[0, '#d6eaf6'], [1, '#b3d3ec']]);
+const forestTint = hex('#bfe0bf');
+const POLL = ramp([[0, '#fff3d6'], [0.35, '#ffc4a8'], [0.65, '#f79bb8'], [1, '#a77be0']]);
+const RAIN = ramp([[0, '#bcd6ff'], [1, '#5b84d9']]);
+const TEMP = ramp([[0, '#a9c7f5'], [0.35, '#d6e9f7'], [0.5, '#f4f1ea'], [0.7, '#ffd6b0'], [1, '#ff9e9e']]);
+const HIGH = hex('#ffb3ba'), LOW = hex('#a9c7f5');
+const THINK = ramp([[0, '#e6e9f5'], [0.5, '#8b97d6'], [1, '#33428f']]);
+const PENR = ramp([[0, '#fff1e6'], [0.4, '#ffc2b4'], [0.75, '#ff8fa3'], [1, '#d6587a']]);
+
+/* ---------- 보기 ---------- */
+const VIEWS = [
+  { id: 'wind',  label: '바람',     legend: null },
+  { id: 'temp',  label: '기온',     legend: { ramp: TEMP, lo: '−15℃', hi: '35℃' } },
+  { id: 'rain',  label: '비',       legend: { ramp: RAIN, lo: '약함', hi: '강함 (2 mm/h 이상)' } },
+  { id: 'press', label: '기압',     legend: { custom: 'press' } },
+  { id: 'now',   label: '지금 오염', legend: { ramp: POLL, lo: '깨끗', hi: '짙음 (30 µg/m³ 이상)' } },
+  { id: 'avg',   label: '평균 오염', legend: { ramp: POLL, lo: '깨끗', hi: '짙음 (20 µg/m³ 이상)' } },
+  { id: 'dep',   label: '쌓인 오염', legend: { ramp: POLL, lo: '적음', hi: '많음 (30 kg/ha/년 이상)' } },
+  { id: 'pen',   label: '벌점 지도', legend: { ramp: PENR, lo: '벌점 없음', hi: '벌점 큼 (칸당 5 이상)' } }
+];
+
+const S = {
+  sim: null, view: 'wind', playing: false, speed: 24, acc: 0, last: 0, hover: -1, dirty: true, lastHud: 0,
+  runs: [], runSeq: 0, curRun: 0, busy: false, onnx: null, nFac: 24,
+  think: null, pick: -1, pickT: 0, move: null, ruleCache: new Map(), searchLog: [], scoring: false, scoredFresh: false,
+  // 지도 보기 변환: 화면 좌표 = (칸 좌표 × k) + (ox, oy)
+  zoom: 1, ox: 0, oy: 0, drag: null
+};
+const shade = new Float32Array(NC);
+
+const fieldC = $('field'), partsC = $('parts'), overC = $('over');
+const fctx = fieldC.getContext('2d'), pctx = partsC.getContext('2d'), octx = overC.getContext('2d');
+const off = document.createElement('canvas'); off.width = NX; off.height = NY;
+const offCtx = off.getContext('2d'), img = offCtx.createImageData(NX, NY);
+let VW = 600, VH = 600, DPR = 1;
+
+/* ---------- 지도 보기 (드래그·줌) ---------- */
+const baseK = () => Math.min(VW, VH) / NX;            // 확대 1배일 때 한 칸 픽셀
+const cellPx = () => baseK() * S.zoom;
+function fitView() {
+  S.zoom = 1;
+  const k = cellPx();
+  S.ox = (VW - NX * k) / 2; S.oy = (VH - NY * k) / 2;
+  viewChanged(); if (S.sim) initParticles();
+}
+function clampView() {
+  const k = cellPx(), w = NX * k, m = 80;               // 지도가 최소 80px은 화면에 남도록
+  S.ox = Math.min(VW - m, Math.max(m - w, S.ox));
+  S.oy = Math.min(VH - m, Math.max(m - w, S.oy));
+}
+function viewChanged() { clampView(); pctx.clearRect(0, 0, partsC.width, partsC.height); S.dirty = true; $('zoom-label').textContent = `×${S.zoom.toFixed(1)}`; }
+function zoomAt(cx, cy, factor) {
+  const k0 = cellPx(), gx = (cx - S.ox) / k0, gy = (cy - S.oy) / k0;
+  S.zoom = Math.min(10, Math.max(1, S.zoom * factor));
+  const k1 = cellPx();
+  S.ox = cx - gx * k1; S.oy = cy - gy * k1;
+  viewChanged(); initParticles();
+}
+function resize() {
+  const wrap = $('mapwrap');
+  const oldK = cellPx(), cx = VW / 2, cy = VH / 2, gx = (cx - S.ox) / oldK, gy = (cy - S.oy) / oldK;
+  VW = Math.max(200, wrap.clientWidth); VH = Math.max(200, wrap.clientHeight);
+  DPR = window.devicePixelRatio || 1;
+  for (const c of [fieldC, partsC, overC]) { c.width = VW * DPR; c.height = VH * DPR; c.style.width = VW + 'px'; c.style.height = VH + 'px'; }
+  if (!S.sim) return;
+  const k = cellPx(); S.ox = VW / 2 - gx * k; S.oy = VH / 2 - gy * k;
+  viewChanged();
+}
+
+/* ---------- 세계 · 공장 ---------- */
+function newWorld(seed) {
+  S.sim = new A.Sim({ seed });
+  const T = S.sim.T;
+  for (let i = 0; i < NC; i++) shade[i] = Math.min(1, Math.max(0, 0.5 + (T.dhx[i] + T.dhy[i]) * 9));
+  S.runs = []; S.curRun = 0; S.scoredFresh = false; S.ruleCache = new Map(); S.searchLog = []; renderAiTable();
+  hideBanner(); $('search-wrap').classList.add('hidden'); $('ai-feed').innerHTML = '';
+  S.sim.factories.fill(0);
+  initParticles(); S.dirty = true; updateHud();
+  runAgent('rule');                 // 처음에는 규칙 기반 정책으로 배치해서 보여줌
+}
+
+/* ---------- 렌더링 ---------- */
+function baseColor(i) {
+  const T = S.sim.T, e = T.elev[i];
+  if (e <= 0) return seaRamp(Math.min(1, -e / 1400));
+  let c = landRamp(Math.min(1, e / 2400));
+  if (T.lc[i] === A.LC.FOREST) c = c.map((v, k) => v * 0.6 + forestTint[k] * 0.4);
+  const s = 0.9 + 0.2 * (shade[i] - 0.5) * 2;
+  return c.map(v => Math.min(255, v * s));
+}
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+function renderField() {
+  const sim = S.sim, W = sim.W, d = img.data, v = S.view;
+  const avg = v === 'avg' ? sim.avgSO2() : null, dep = v === 'dep' ? sim.depYear() : null;
+  const penMap = v === 'pen' ? sim.penalty().map : null, think = S.think;
+  for (let i = 0; i < NC; i++) {
+    let c = baseColor(i);
+    if (v === 'rain') { const t = Math.min(1, Math.pow(W.P[i] / 2, 0.5)); if (t > 0.05) c = mix(c, RAIN(t), Math.min(0.9, 0.25 + t * 0.8)); }
+    else if (v === 'temp') { const t = Math.min(1, Math.max(0, (W.Tc[i] + 15) / 50)); c = mix(c, TEMP(t), 0.72); }
+    else if (v === 'press') { const p = W.p[i], t = Math.min(1, Math.abs(p) / 12); c = mix(c, p > 0 ? HIGH : LOW, t * 0.55); }
+    else if (v === 'pen') { const t = Math.min(1, Math.pow(penMap[i] / 5, 0.5)); if (t > 0.02) c = mix(c, PENR(t), Math.min(0.92, 0.2 + t * 0.9)); }
+    else if (v === 'now' || v === 'avg' || v === 'dep') {
+      const val = v === 'now' ? sim.cSO2[i] / 30 : v === 'avg' ? avg[i] / 20 : dep[i] / 30;
+      const t = Math.min(1, Math.pow(Math.max(0, val), 0.55));
+      if (t > 0.01) c = mix(c, POLL(t), Math.min(0.9, t * 1.5));
+    }
+    if (think) { const t = think[i]; if (t > 0.015) c = mix(c, THINK(Math.min(1, Math.sqrt(t))), Math.min(0.85, 0.18 + Math.sqrt(t) * 0.75)); }
+    d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
+  }
+  offCtx.putImageData(img, 0, 0);
+  const k = cellPx() * DPR;
+  fctx.setTransform(1, 0, 0, 1, 0, 0);
+  fctx.fillStyle = '#dbe9f3'; fctx.fillRect(0, 0, fieldC.width, fieldC.height);
+  fctx.imageSmoothingEnabled = true; fctx.imageSmoothingQuality = 'high';
+  fctx.drawImage(off, S.ox * DPR, S.oy * DPR, NX * k, NY * k);
+}
+
+function drawIsobars(ctx, k, ox, oy) {
+  const p = S.sim.W.p;
+  ctx.lineWidth = 1.3 * DPR; ctx.strokeStyle = 'rgba(90,100,130,0.38)';
+  ctx.beginPath();
+  for (let lev = -15; lev <= 15; lev += 1) {
+    for (let y = 0; y < NY - 1; y++) for (let x = 0; x < NX - 1; x++) {
+      const i = y * NX + x, a = p[i] - lev, b = p[i + 1] - lev, c = p[i + NX + 1] - lev, d = p[i + NX] - lev;
+      const pts = [];
+      if ((a > 0) !== (b > 0)) pts.push([x + a / (a - b), y]);
+      if ((b > 0) !== (c > 0)) pts.push([x + 1, y + b / (b - c)]);
+      if ((d > 0) !== (c > 0)) pts.push([x + d / (d - c), y + 1]);
+      if ((a > 0) !== (d > 0)) pts.push([x, y + a / (a - d)]);
+      for (let q = 0; q + 1 < pts.length; q += 2) {
+        ctx.moveTo(ox + (pts[q][0] + 0.5) * k, oy + (pts[q][1] + 0.5) * k);
+        ctx.lineTo(ox + (pts[q + 1][0] + 0.5) * k, oy + (pts[q + 1][1] + 0.5) * k);
+      }
+    }
+  }
+  ctx.stroke();
+}
+
+function drawOverlay() {
+  const ctx = octx, k = cellPx() * DPR, ox = S.ox * DPR, oy = S.oy * DPR, sim = S.sim, f = sim.factories;
+  ctx.clearRect(0, 0, overC.width, overC.height);
+  if (S.view === 'press') drawIsobars(ctx, k, ox, oy);
+  if (S.view === 'press' || S.view === 'wind') {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const s of sim.W.systems) {
+      const cx = Math.min(NX - 2, Math.max(1, s.x)), cy = Math.min(NY - 2, Math.max(1, s.y));
+      const outside = Math.hypot(cx - s.x, cy - s.y);
+      if (outside > s.r * 0.8) continue;
+      const x = ox + (cx + 0.5) * k, y = oy + (cy + 0.5) * k, r = (outside > 0.5 ? 13 : 18) * DPR;
+      ctx.globalAlpha = outside > 0.5 ? 0.6 : 1;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = s.sign > 0 ? 'rgba(255,179,186,0.95)' : 'rgba(169,199,245,0.95)'; ctx.fill();
+      ctx.lineWidth = 2 * DPR; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.fillStyle = '#3e4553'; ctx.font = `700 ${15 * DPR}px system-ui,sans-serif`;
+      ctx.fillText(s.sign > 0 ? '고' : '저', x, y + DPR);
+      if (s.blocking) { ctx.font = `600 ${10 * DPR}px system-ui,sans-serif`; ctx.fillText('정체', x, y + r + 9 * DPR); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  // 공장 (확대할수록 아이콘이 커짐)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < NC; i++) {
+    const n = f[i]; if (!n) continue;
+    const x = ox + (i % NX + 0.5) * k, y = oy + (((i / NX) | 0) + 0.5) * k;
+    if (x < -20 || y < -20 || x > overC.width + 20 || y > overC.height + 20) continue;
+    const r = Math.max(8 * DPR, Math.min(26 * DPR, k * 0.42));
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2 * DPR; ctx.strokeStyle = '#6b6f86'; ctx.stroke();
+    if (r > 13 * DPR) { ctx.fillStyle = '#4a4e63'; ctx.fillRect(x - r * 0.42, y - r * 0.1, r * 0.84, r * 0.5); ctx.fillRect(x - r * 0.3, y - r * 0.55, r * 0.18, r * 0.5); }
+    if (n > 1 || r <= 13 * DPR) {
+      ctx.fillStyle = '#4a4e63'; ctx.font = `700 ${Math.max(9 * DPR, r * (r > 13 * DPR ? 0.7 : 1.1))}px system-ui,sans-serif`;
+      if (r > 13 * DPR) { ctx.fillStyle = '#6b6f86'; ctx.fillText('×' + n, x + r * 1.15, y - r * 0.8); }
+      else ctx.fillText(n, x, y + 0.5 * DPR);
+    }
+  }
+  // AI가 방금 고른 칸: 퍼지는 고리
+  const now = performance.now();
+  if (S.pick >= 0 && now - S.pickT < 900) {
+    const a = (now - S.pickT) / 900, x = ox + (S.pick % NX + 0.5) * k, y = oy + (((S.pick / NX) | 0) + 0.5) * k;
+    ctx.beginPath(); ctx.arc(x, y, (10 + 26 * a) * DPR, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(51,66,143,${1 - a})`; ctx.lineWidth = 2 * DPR; ctx.stroke();
+  }
+  // 탐색 AI의 이동: 화살표 (초록 = 채택, 회색 = 되돌림)
+  if (S.move && S.move.from >= 0 && now - S.move.t < 1800) {
+    const m = S.move, fx = ox + (m.from % NX + 0.5) * k, fy = oy + (((m.from / NX) | 0) + 0.5) * k;
+    const tx = ox + (m.to % NX + 0.5) * k, ty = oy + (((m.to / NX) | 0) + 0.5) * k;
+    const alpha = 1 - Math.max(0, (now - m.t - 900) / 900), col = m.ok ? `rgba(47,158,110,${alpha})` : `rgba(140,146,160,${alpha})`;
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3 * DPR; ctx.setLineDash([6 * DPR, 5 * DPR]);
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
+    const ang = Math.atan2(ty - fy, tx - fx), hl = 12 * DPR;
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - hl * Math.cos(ang - 0.45), ty - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(tx - hl * Math.cos(ang + 0.45), ty - hl * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(fx, fy, 7 * DPR, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (S.hover >= 0 && !S.drag) {
+    const x = S.hover % NX, y = (S.hover / NX) | 0;
+    ctx.strokeStyle = 'rgba(62,69,83,0.7)'; ctx.lineWidth = 1.5 * DPR;
+    ctx.strokeRect(ox + x * k, oy + y * k, k, k);
+  }
+}
+
+/* ---------- 바람 입자 ---------- */
+const NP = 1800, px = new Float32Array(NP), py = new Float32Array(NP), page = new Float32Array(NP);
+function spawnParticle(j) {
+  // 보이는 영역 안에서 생성 (확대해도 입자 밀도 유지)
+  const k = cellPx();
+  const x0 = Math.max(0, -S.ox / k), x1 = Math.min(NX, (VW - S.ox) / k), y0 = Math.max(0, -S.oy / k), y1 = Math.min(NY, (VH - S.oy) / k);
+  px[j] = x0 + Math.random() * Math.max(0.01, x1 - x0); py[j] = y0 + Math.random() * Math.max(0.01, y1 - y0); page[j] = 0;
+}
+function initParticles() { for (let j = 0; j < NP; j++) { spawnParticle(j); page[j] = Math.random() * 80; } pctx.clearRect(0, 0, partsC.width, partsC.height); }
+function bil(a, x, y) {
+  let gx = x - 0.5, gy = y - 0.5;
+  gx = gx < 0 ? 0 : gx > NX - 1.001 ? NX - 1.001 : gx; gy = gy < 0 ? 0 : gy > NY - 1.001 ? NY - 1.001 : gy;
+  const ix = gx | 0, iy = gy | 0, fx = gx - ix, fy = gy - iy, i = iy * NX + ix;
+  return a[i] * (1 - fx) * (1 - fy) + a[i + 1] * fx * (1 - fy) + a[i + NX] * (1 - fx) * fy + a[i + NX + 1] * fx * fy;
+}
+function stepParticles() {
+  const W = S.sim.W, k = cellPx() * DPR, ox = S.ox * DPR, oy = S.oy * DPR, ctx = pctx;
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(0, 0, partsC.width, partsC.height);
+  ctx.globalCompositeOperation = 'source-over';
+  const strong = S.view === 'wind';
+  ctx.strokeStyle = strong ? 'rgba(70,82,110,0.55)' : 'rgba(70,82,110,0.22)';
+  ctx.lineWidth = (strong ? 1.3 : 1) * DPR; ctx.beginPath();
+  const sp = 0.006 / Math.sqrt(S.zoom);        // 확대 시 화면 속도가 너무 빨라지지 않게
+  for (let j = 0; j < NP; j++) {
+    const x = px[j], y = py[j], u = bil(W.u, x, y), v = bil(W.v, x, y);
+    const nx = x + u * sp, ny = y + v * sp;
+    const sx = S.ox + nx * k / DPR, sy = S.oy + ny * k / DPR;   // 화면 밖으로 나가면 화면 안에서 다시 생성
+    if (nx < 0 || ny < 0 || nx >= NX || ny >= NY || sx < 0 || sy < 0 || sx > VW || sy > VH || ++page[j] > 90) { spawnParticle(j); continue; }
+    ctx.moveTo(ox + x * k, oy + y * k); ctx.lineTo(ox + nx * k, oy + ny * k); px[j] = nx; py[j] = ny;
+  }
+  ctx.stroke();
+}
+
+/* ---------- 범례 ---------- */
+function drawLegend() {
+  const V = VIEWS.find(v => v.id === S.view), el = $('legend');
+  if (!V.legend) { el.innerHTML = '선의 흐름이 바람 방향이에요 · <b style="color:#ff9aa5">고</b> 고기압(맑고 바람 약함) · <b style="color:#7fa6e6">저</b> 저기압(흐리고 비)'; return; }
+  if (V.legend.custom === 'press') { el.innerHTML = '<span style="color:#7fa6e6">● 저기압</span>&nbsp;·&nbsp;<span style="color:#ff9aa5">● 고기압</span>&nbsp;·&nbsp;선은 등압선(1 hPa 간격) · 촘촘할수록 바람이 세요'; return; }
+  el.innerHTML = `<span>${V.legend.lo}</span><canvas width="220" height="12"></canvas><span>${V.legend.hi}</span>`;
+  const c = el.querySelector('canvas'), ctx = c.getContext('2d');
+  for (let x = 0; x < 220; x++) { const col = V.legend.ramp(x / 219); ctx.fillStyle = `rgb(${col.map(v => v | 0).join(',')})`; ctx.fillRect(x, 0, 1, 12); }
+}
+
+/* ---------- 정보 패널 ---------- */
+const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function dateOf(h) { let d = Math.floor(h / 24), m = 0; while (m < 11 && d >= MONTH_DAYS[m]) { d -= MONTH_DAYS[m]; m++; } return { m: m + 1, d: d + 1, hh: h % 24 }; }
+const SEASON = m => (m === 12 || m <= 2) ? '겨울 · 북서 계절풍' : m <= 5 ? '봄' : m <= 8 ? '여름 · 남동 계절풍' : '가을';
+const DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+const ARROWS = ['↓', '↙', '←', '↖', '↑', '↗', '→', '↘'];
+function windName(u, v) {
+  const from = (Math.atan2(-u, v) * 180 / Math.PI + 360) % 360, k = Math.round(from / 45) % 8;
+  return { name: DIRS[k] + '풍', arrow: ARROWS[k] };
+}
+function updateHud() {
+  const sim = S.sim, W = sim.W, h = Math.min(sim.hour, HOURS - 1), dt = dateOf(h);
+  $('w-date').textContent = `${dt.m}월 ${dt.d}일 ${String(dt.hh).padStart(2, '0')}시`;
+  $('w-season').textContent = SEASON(dt.m);
+  let rainy = 0, su = 0, sv = 0, sp = 0, tl = 0, nl = 0;
+  for (let i = 0; i < NC; i++) {
+    su += W.u[i]; sv += W.v[i]; sp += Math.hypot(W.u[i], W.v[i]); if (W.P[i] > 0.1) rainy++;
+    if (sim.T.lc[i] !== A.LC.SEA) { tl += W.Tc[i]; nl++; }
+  }
+  const day = dt.hh >= 6 && dt.hh < 18;
+  $('w-icon').textContent = rainy / NC > 0.3 ? '비' : day ? '낮' : '밤';
+  const wn = windName(su / NC, sv / NC);
+  $('s-wind').innerHTML = `<span class="compass">${wn.arrow}</span>${wn.name} ${nf(sp / NC)} m/s`;
+  $('s-temp').textContent = `${nf(tl / Math.max(1, nl))} ℃`;
+  $('s-rain').textContent = `${Math.round(rainy / NC * 100)}%`;
+  const inMap = W.systems.filter(s => Math.hypot(Math.min(NX - 2, Math.max(1, s.x)) - s.x, Math.min(NY - 2, Math.max(1, s.y)) - s.y) <= s.r * 0.8);
+  const hiN = inMap.filter(s => s.sign > 0).length, loN = inMap.length - hiN, blk = inMap.filter(s => s.blocking).length;
+  $('s-press').innerHTML = `<span class="chip h">고 ${hiN}</span><span class="chip l">저 ${loN}</span>${blk ? '<span class="chip s">정체</span>' : ''}`;
+  let nFac = 0, mx = 0; for (let i = 0; i < NC; i++) { nFac += sim.factories[i]; if (sim.cSO2[i] > mx) mx = sim.cSO2[i]; }
+  const cur = S.runs.find(r => r.id === S.curRun);
+  $('s-fac').textContent = cur ? `${nFac}개 · ${cur.icon} ${cur.name} #${cur.id}` : `${nFac}개`;
+  $('s-air').textContent = `${nf(sim.airborne() * 2 / 1e3, 0)} t`;
+  $('s-max').textContent = `${nf(mx)} µg/m³`;
+  $('s-dep').textContent = `${nf(sim.deposited / 1e6, 2)} kt`;
+  $('fill').style.width = (sim.hour / HOURS * 100) + '%';
+  updatePenalty();
+  drawChart();
+}
+const PEN_LABEL = {
+  over:   ['연평균 기준 초과', 'SO₂ 연평균 20 µg/m³ 초과분 (제곱 가중)'],
+  winter: ['겨울 반년 기준 초과', '10~3월 평균 20 µg/m³ 초과분 (제곱 가중)'],
+  daily:  ['일평균 고농도', 'WHO 24시간 지침 40 µg/m³를 넘은 날의 초과량'],
+  acid:   ['산성 침착 초과', '16 kg S/ha·년 초과 비율 (제곱 가중)'],
+  load:   ['전체 오염 부담', '모든 땅의 평균 농도 합'],
+  out:    ['지도 밖 유출', '이웃 지역으로 떠넘긴 양']
+};
+const PEN_COL = { over: '#ff8fa3', winter: '#f7a1c4', daily: '#ff7a7a', acid: '#ffb38a', load: '#c9a7f0', out: '#9cc3f0' };
+const big = v => v >= 1000 ? nf(v, 0) : nf(v, 1);
+function updatePenalty() {
+  const sim = S.sim, p = sim.penalty();
+  $('p-total').textContent = big(p.total);
+  $('p-over').textContent = p.nOver ? `기준 넘은 칸 ${p.nOver}개 · 고농도 ${nf(p.exceedDays, 0)} 칸·일` : '';
+  const note = $('p-note');
+  if (sim.nH === 0) { note.textContent = '재생하거나 채점하면 계산돼요'; note.className = 'pen-note'; }
+  else if (sim.hour >= HOURS && S.scoredFresh) { note.textContent = '1년 채점 결과'; note.className = 'pen-note'; }
+  else if (sim.hour >= HOURS) { note.textContent = '1년 도중 배치가 바뀌었어요 · 다시 채점하세요'; note.className = 'pen-note stale'; }
+  else { note.textContent = `${Math.floor(sim.hour / 24)}일 경과 · 1년으로 환산한 추정값`; note.className = 'pen-note'; }
+  const mx = Math.max(1e-9, ...Object.values(p.terms));
+  $('p-bars').innerHTML = Object.keys(p.terms).map(k =>
+    `<div class="pbar" title="${PEN_LABEL[k][1]}"><div class="top"><span>${PEN_LABEL[k][0]}</span><b>${big(p.terms[k])}</b></div>` +
+    `<div class="track"><div class="fill" style="width:${p.terms[k] / mx * 100}%;background:${PEN_COL[k]}"></div></div></div>`).join('');
+}
+
+/* ---------- 백그라운드 작업 (Web Worker) ---------- */
+function workerMain() {
+  let sim = null, seed = -1;
+  const AS = self.AirSim, H = AS.CONFIG.HOURS;
+  self.onmessage = function (e) {
+    const d = e.data, t0 = performance.now(), post = m => self.postMessage(Object.assign({ job: d.job }, m));
+    try {
+      Object.assign(AS.climate, d.climate || {});
+      if (!sim || seed !== d.seed) { sim = new AS.Sim({ seed: d.seed }); seed = d.seed; }
+      if (d.type === 'full') {
+        sim.factories.set(d.factories); sim.reset();
+        while (sim.hour < H) { sim.stepHour(); if (sim.hour % 96 === 0) post({ type: 'progress', p: sim.hour / H }); }
+        post({ type: 'done', state: sim.exportState(), ms: performance.now() - t0 });
+      } else if (d.type === 'fast') {
+        const s = sim.evaluate(d.factories, { mode: 'fast', onProgress: p => post({ type: 'progress', p }) });
+        post({ type: 'done', total: s.total, ms: performance.now() - t0 });
+      } else if (d.type === 'search') {
+        const r = AS.AI.search(sim, d.factories, {
+          iters: d.iters, rng: AS.mulberry32(d.rseed),
+          onStep: (it, score, layout, ok, from, to, cand) => post({ type: 'step', it, iters: d.iters, score, ok, from, to, cand, layout: Uint8Array.from(layout) })
+        });
+        post({ type: 'done', total: r.score, layout: r.layout, ms: performance.now() - t0 });
+      }
+    } catch (err) { post({ type: 'error', msg: String(err && err.stack || err) }); }
+  };
+}
+let worker = null, jobSeq = 0;
+const jobs = {};
+function getWorker() {
+  if (worker) return worker;
+  const src = $('core').textContent + '\n;(' + workerMain.toString() + ')();';
+  worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  worker.onmessage = e => { const d = e.data, j = jobs[d.job]; if (!j) return; if (d.type === 'done' || d.type === 'error') delete jobs[d.job]; j(d); };
+  return worker;
+}
+function runJob(msg, onMsg) {
+  return new Promise((resolve, reject) => {
+    const id = ++jobSeq;
+    jobs[id] = d => { if (d.type === 'done') resolve(d); else if (d.type === 'error') reject(new Error(d.msg)); else onMsg && onMsg(d); };
+    try { getWorker().postMessage(Object.assign({ job: id, seed: S.sim.seed, climate: Object.assign({}, A.climate) }, msg)); }
+    catch (err) { delete jobs[id]; reject(err); }
+  });
+}
+/* ---------- AI 실행 기록 (막대 목록) ---------- */
+const AGENT_COL = { random: '#b9bec8', rule: '#d6a37c', search: '#6f8fc4', onnx: '#7b6cc0' };
+function renderAiTable() {
+  const el = $('ai-table');
+  if (!S.runs.length) { el.innerHTML = '<div class="empty">아직 AI가 배치한 적이 없어요</div>'; return; }
+  const scoreOf = r => r.full != null ? r.full : r.fast;
+  const done = S.runs.filter(r => scoreOf(r) != null);
+  const best = done.length ? Math.min(...done.map(scoreOf)) : null;
+  const mx = done.length ? Math.max(...done.map(scoreOf)) : 1;
+  el.innerHTML = '<div class="runs-head"><span>정책별 벌점</span><span>막대가 짧을수록 좋아요</span></div>' +
+    S.runs.slice().reverse().map(r => {
+      const sc = scoreOf(r), w = sc == null ? 0 : Math.max(3, sc / mx * 100);
+      return `<div class="run ${r.id === S.curRun ? 'cur' : ''} ${best != null && sc === best ? 'best' : ''}" data-run="${r.id}">` +
+        `<div class="run-top"><span>${r.icon} ${r.name} <i>· 공장 ${r.n}개</i></span><b>${sc == null ? '…' : big(sc)}${best != null && sc === best ? ' ★' : ''}</b></div>` +
+        `<div class="run-bar"><div style="width:${w}%;background:${AGENT_COL[r.key] || '#ccc'}"></div></div>` +
+        `<div class="run-sub">${r.full != null ? `1년 채점 ${big(r.full)} · 빠른 평가 ${big(r.fast)}` : r.fast != null ? '빠른 평가 (1년 중 8구간×4일)' : '채점 중…'}</div></div>`;
+    }).join('');
+  el.querySelectorAll('.run[data-run]').forEach(d => d.onclick = () => { if (!S.busy) applyRun(+d.dataset.run); });
+}
+function applyRun(id) {
+  const r = S.runs.find(x => x.id === id); if (!r) return;
+  setPlaying(false);
+  S.sim.factories.set(r.layout); S.sim.reset(); S.curRun = id; S.scoredFresh = false;
+  initParticles(); S.dirty = true; updateHud(); renderAiTable();
+}
+function addRun(agent, layout, key) {
+  let n = 0; for (let i = 0; i < NC; i++) n += layout[i];
+  const r = { id: ++S.runSeq, key, name: agent.name, icon: agent.icon, n, layout: Uint8Array.from(layout), fast: null, full: null };
+  S.runs.push(r); applyRun(r.id);
+  return r;
+}
+
+/* ---------- AI 진행 배너 (지도 위) ---------- */
+const STAGES = ['observe', 'place', 'score', 'result'];
+function banner(stage, title, sub, p) {
+  const el = $('ai-banner');
+  el.classList.remove('hidden');
+  el.classList.toggle('done', stage === 'result');
+  $('ab-title').textContent = title;
+  $('ab-sub').innerHTML = sub || '';
+  const si = STAGES.indexOf(stage);
+  el.querySelectorAll('.ab-steps span').forEach((s, k) => { s.classList.toggle('on', k === si); s.classList.toggle('past', k < si); });
+  $('ab-fill').style.width = ((p == null ? 0 : p) * 100) + '%';
+}
+const hideBanner = () => $('ai-banner').classList.add('hidden');
+function feed(text, cls) {
+  const el = $('ai-feed'), d = document.createElement('div');
+  d.innerHTML = text; if (cls) d.className = cls;
+  el.prepend(d);
+  while (el.children.length > 6) el.lastChild.remove();
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function setBusy(b, label) {
+  S.busy = b; S.scoring = b;
+  for (const id of ['btn-score', 'play', 'btn-world', 'btn-reset']) $(id).disabled = b;
+  $('nfac').disabled = b;
+  document.querySelectorAll('#ai-agents button').forEach(x => x.disabled = b || (x.dataset.agent === 'onnx' && !S.onnx));
+  document.body.classList.toggle('ai-busy', b);
+  if (label != null) $('ai-status').textContent = label;
+}
+const setProg = p => { $('ai-prog-fill').style.width = (p * 100) + '%'; };
+
+/* 1년 채점 */
+async function score() {
+  if (S.busy) return;
+  setPlaying(false); setBusy(true);
+  const run = S.runs.find(r => r.id === S.curRun);
+  $('score-status').textContent = '채점 중 0%';
+  banner('score', '시뮬레이터가 1년 전체를 계산하는 중', '1월 1일부터 8,760시간 동안 바람·비·오염을 계산해요', 0);
+  try {
+    const d = await runJob({ type: 'full', factories: S.sim.factories.slice() }, m => {
+      $('score-status').textContent = `채점 중 ${Math.round(m.p * 100)}%`; setProg(m.p);
+      banner('score', '시뮬레이터가 1년 전체를 계산하는 중', `${Math.round(m.p * 12)}월까지 계산했어요`, m.p);
+    });
+    S.sim.importState(d.state); S.scoredFresh = true;
+    const total = S.sim.penalty().total;
+    if (run) run.full = total;
+    $('score-status').textContent = `완료 · ${(d.ms / 1000).toFixed(1)}초`;
+    banner('result', `1년 채점 완료 · 벌점 ${big(total)}`, run ? `${run.icon} ${run.name}의 배치 · '벌점 지도'에서 어디가 문제인지 볼 수 있어요` : '', 1);
+  } catch (err) { $('score-status').textContent = '채점 실패: ' + err.message; hideBanner(); }
+  setBusy(false); setProg(0);
+  initParticles(); S.dirty = true; updateHud(); renderAiTable();
+}
+
+/* ---------- AI가 생각하고 놓는 모습 ----------
+   매 단계: 정책이 칸마다 점수 → 보라색 '생각 지도'로 표시 → 한 칸 선택(반짝) → 공장 추가 */
+const AGENTS = {
+  random: { name: '무작위', icon: '', think: '아무 데나 고르는 중' },
+  rule:   { name: '규칙 기반', icon: '', think: '평지·저지대를 고르고 이미 지은 곳 근처는 피하는 중' },
+  onnx:   { name: '학습한 AI', icon: '', think: '학습한 신경망이 칸마다 점수를 매기는 중' },
+  search: { name: '시뮬레이터 탐색 AI', icon: '' }
+};
+function softmaxView(L, allow, temp) {
+  let mx = -Infinity; for (let i = 0; i < NC; i++) if (allow[i] && L[i] > mx) mx = L[i];
+  const p = new Float32Array(NC); let sum = 0, pm = 0;
+  for (let i = 0; i < NC; i++) if (allow[i]) { p[i] = Math.exp((L[i] - mx) / temp); sum += p[i]; }
+  for (let i = 0; i < NC; i++) { p[i] /= sum; if (p[i] > pm) pm = p[i]; }
+  return { p, pm };
+}
+const coordOf = i => `(${i % NX}, ${(i / NX) | 0})`;
+function describeCell(i) {
+  const T = S.sim.T, kind = ['바다', '평지', '숲', '높은 산'][T.lc[i]];
+  return `${coordOf(i)} ${kind} ${nf(Math.max(0, T.elev[i]), 0)}m`;
+}
+async function animatePlace(key, obs) {
+  const n = obs.nFac, per = A.AI.PER_CELL, f = new Uint8Array(NC), allow = new Uint8Array(NC);
+  const delay = Math.max(45, Math.min(170, 4200 / n));
+  const ag = AGENTS[key];
+  S.sim.factories.fill(0); S.sim.reset(); S.dirty = true; updateHud();
+  $('ai-feed').innerHTML = '';
+  let ruleL = key === 'rule' ? Float64Array.from(A.AI.policies.rule.logits(obs)) : null;
+  const orng = A.mulberry32(((S.sim.seed * 7919) ^ (n * 31)) >>> 0);   // 학습한 AI 뽑기용 (같은 지형·공장 수면 같은 결과)
+  for (let k = 0; k < n; k++) {
+    for (let i = 0; i < NC; i++) allow[i] = obs.mask[i] && f[i] < per ? 1 : 0;
+    let L, temp = 1;
+    if (key === 'rule') { L = ruleL; temp = 0.35; }
+    else if (key === 'random') { L = new Float64Array(NC); }
+    else {
+      for (let i = 0; i < NC; i++) obs.grid[8 * NC + i] = f[i] / 2;
+      obs.globals[4] = n / 50; obs.globals[5] = (n - k) / 50;
+      L = await onnxLogits(obs);
+    }
+    const { p, pm } = softmaxView(L, allow, temp);
+    let best = -1;
+    if (key === 'random' || key === 'onnx') {
+      // 학습한 AI도 학습 때처럼 확률대로 뽑음. 가장 높은 칸만 고르면(greedy) 덜 학습된 모델은 한곳에 몰아 짓게 됨
+      let r = key === 'onnx' ? orng() : Math.random(); for (let i = 0; i < NC; i++) { r -= p[i]; if (r <= 0 && allow[i]) { best = i; break; } }
+      if (best < 0) for (let i = NC - 1; i >= 0; i--) if (allow[i]) { best = i; break; }
+    } else {
+      let bv = -Infinity; for (let i = 0; i < NC; i++) if (allow[i] && L[i] > bv) { bv = L[i]; best = i; }
+    }
+    if (best < 0) break;
+    // 생각 지도: 가장 끌리는 칸 = 1
+    const th = new Float32Array(NC); for (let i = 0; i < NC; i++) th[i] = pm > 0 ? p[i] / pm : 0;
+    S.think = th; S.pick = best; S.pickT = performance.now();
+    f[best]++;
+    if (key === 'rule') {                 // 웹 규칙 기반 정책과 같은 규칙: 같은 칸 감점 + 주변 감점
+      ruleL[best] -= 1.0;
+      const bx = best % NX, by = (best / NX) | 0, rad = 4, R = Math.ceil(rad * 2.5);
+      for (let y = Math.max(0, by - R); y <= Math.min(NY - 1, by + R); y++)
+        for (let x = Math.max(0, bx - R); x <= Math.min(NX - 1, bx + R); x++)
+          ruleL[y * NX + x] -= 2.5 * Math.exp(-((x - bx) ** 2 + (y - by) ** 2) / (2 * rad * rad));
+    }
+    S.sim.factories.set(f); S.dirty = true; updateHud();
+    const conf = (p[best] * 100);
+    feed(`<b>#${k + 1}</b><em>${describeCell(best)}</em><span>${key === 'random' ? '무작위 선택' : key === 'rule' ? '규칙 점수 1위' : `확률대로 뽑음 · 이 칸 확률 ${conf < 1 ? conf.toFixed(1) : conf.toFixed(0)}%`}</span>`);
+    banner('place', `${ag.icon} ${ag.name}가 공장을 놓는 중 · ${k + 1} / ${n}`, `보라색이 진할수록 AI가 끌리는 칸 · ${ag.think}`, (k + 1) / n);
+    setProg((k + 1) / n);
+    await sleep(delay);
+  }
+  S.think = null; S.dirty = true;
+  return f;
+}
+
+/* 같은 지형·공장 수의 규칙 기반 점수 (비교용, 한 번만 계산해 저장) */
+async function ruleScore(n) {
+  const key = `${S.sim.seed}:${n}`;
+  if (S.ruleCache.has(key)) return S.ruleCache.get(key);
+  const lay = A.AI.policies.rule.run(A.AI.observe(S.sim, n));
+  const d = await runJob({ type: 'fast', factories: lay });
+  S.ruleCache.set(key, d.total);
+  return d.total;
+}
+function compareText(ai, rule) {
+  const pct = (1 - ai / rule) * 100;
+  return pct >= 0 ? `<b class="good">규칙 기반(${big(rule)})보다 ${pct.toFixed(0)}% 낮은 벌점</b>` : `<b class="bad">규칙 기반(${big(rule)})보다 ${(-pct).toFixed(0)}% 높은 벌점</b>`;
+}
+
+async function runAgent(key) {
+  if (S.busy) return;
+  const agent = AGENTS[key];
+  setPlaying(false);
+  setView(S.view === 'pen' || S.view === 'avg' || S.view === 'dep' ? 'wind' : S.view);
+  const obs = A.AI.observe(S.sim, S.nFac);
+  setBusy(true, `${agent.icon} ${agent.name} 실행 중`);
+  banner('observe', `${agent.icon} ${agent.name}가 지형을 살펴보는 중`, `고도·바다·숲·경사·해안 거리 등 9가지 지도와 기후 정보를 입력으로 받아요`, 0);
+  await sleep(700);
+  if (key === 'search') return runSearch(obs);
+  let r;
+  try {
+    const layout = await animatePlace(key, obs);
+    r = addRun(agent, layout, key);
+    banner('score', `시뮬레이터가 이 배치를 채점하는 중`, '1년 중 8구간 × 4일 동안 바람이 오염을 어디로 옮기는지 계산해요', 0);
+    const d = await runJob({ type: 'fast', factories: r.layout }, m => { setProg(m.p); banner('score', `시뮬레이터가 이 배치를 채점하는 중`, `구간 ${Math.round(m.p * 8)} / 8 계산 완료`, m.p); });
+    r.fast = d.total; renderAiTable();
+    const rule = key === 'rule' ? null : await ruleScore(obs.nFac);
+    banner('result', `${agent.icon} ${agent.name} 완료 · 벌점 ${big(d.total)}`, rule ? compareText(d.total, rule) : '다른 AI와 비교해 보세요', 1);
+    $('ai-status').textContent = `${agent.icon} ${agent.name} 완료 · 빠른 벌점 ${big(d.total)} (${(d.ms / 1000).toFixed(1)}초)`;
+  } catch (err) { $('ai-status').textContent = '실패: ' + err.message; hideBanner(); S.think = null; }
+  setBusy(false); setProg(0); renderAiTable(); S.dirty = true;
+}
+
+/* 시뮬레이터 탐색: 공장 하나를 옮겨보고 → 시뮬레이터로 채점 → 나아지면 채택 */
+async function runSearch(obs) {
+  const ITERS = 25, agent = AGENTS.search;
+  const start = A.AI.policies.rule.run(obs);
+  const r = addRun(agent, start, 'search');
+  S.searchLog = [];
+  $('ai-feed').innerHTML = '';
+  $('search-wrap').classList.remove('hidden');
+  banner('score', '출발점(규칙 기반 배치)을 시뮬레이터로 채점하는 중', '이 점수보다 낮추는 게 목표예요', 0);
+  try {
+    const d = await runJob({ type: 'search', factories: start, iters: ITERS, rseed: (Math.random() * 1e9) | 0 }, m => {
+      setProg(m.it / m.iters);
+      r.fast = m.score;
+      S.searchLog.push({ it: m.it, best: m.score, cand: m.cand, ok: m.ok });
+      if (m.it > 0) {
+        S.move = { from: m.from, to: m.to, ok: m.ok, t: performance.now() };
+        feed(`<b>시도 ${m.it}</b><em>${coordOf(m.from)} → ${coordOf(m.to)}</em>` +
+             (m.ok ? `<span class="good">채택 ${big(m.cand)}</span>` : `<span>되돌림 ${big(m.cand)}</span>`), m.ok ? 'ok' : '');
+      }
+      if (m.ok) { r.layout = m.layout; S.sim.factories.set(m.layout); S.dirty = true; }
+      banner(m.it === 0 ? 'score' : 'place',
+        m.it === 0 ? `출발점 벌점 ${big(m.score)}` : `AI가 공장 하나를 옮겨보고 시뮬레이터로 확인 중 · ${m.it} / ${m.iters}`,
+        m.it === 0 ? '이제 공장을 하나씩 옮겨보며 벌점이 줄어드는지 확인해요' :
+        `${m.ok ? '<b class="good">벌점이 줄어서 이동을 채택했어요</b>' : '벌점이 늘어서 되돌렸어요'} · 현재 최선 ${big(m.score)}`, m.it / m.iters);
+      drawSearchChart(); renderAiTable(); updateHud();
+    });
+    r.layout = d.layout; r.fast = d.total;
+    const first = S.searchLog.length ? S.searchLog[0].best : d.total;
+    banner('result', `탐색 완료 · 벌점 ${big(first)} → ${big(d.total)}`,
+      `<b class="good">${((1 - d.total / first) * 100).toFixed(0)}% 줄였어요</b> · 시뮬레이터를 ${ITERS + 1}번 돌려서 찾은 배치 (${(d.ms / 1000).toFixed(0)}초)`, 1);
+    $('ai-status').textContent = `탐색 완료 · 빠른 벌점 ${big(d.total)}`;
+    applyRun(r.id);
+  } catch (err) { $('ai-status').textContent = '탐색 실패: ' + err.message; hideBanner(); }
+  S.move = null;
+  setBusy(false); setProg(0); renderAiTable();
+}
+
+/* ---------- 예쁜 그래프 도우미 ---------- */
+function niceRound(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function lineChart(c, series, opts) {
+  // series: [{data:[...], color, fill, label, width, dots:[{i,ok}]}]
+  const ctx = c.getContext('2d'), W = c.width, H = c.height, dpr = 2;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+  const L = 84, Rr = 18, T = 16, B = (opts.xLabels ? 34 : 16);
+  const all = series.flatMap(s => s.data.filter(v => isFinite(v)));
+  if (all.length < 2) {
+    ctx.fillStyle = '#b5b8c2'; ctx.font = `${12 * dpr}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(opts.empty || '데이터가 아직 없어요', W / 2, H / 2); return;
+  }
+  let lo = opts.min != null ? opts.min : Math.min(...all), hi = Math.max(...all);
+  if (hi - lo < 1e-9) hi = lo + 1;
+  const pad = (hi - lo) * 0.08; hi += pad; if (opts.min == null) lo -= pad;
+  const n = Math.max(...series.map(s => s.data.length));
+  const X = i => L + (W - L - Rr) * (n <= 1 ? 0 : i / (n - 1)), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  ctx.font = `${10 * dpr}px system-ui`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let g = 0; g <= 3; g++) {
+    const v = lo + (hi - lo) * g / 3, y = Y(v);
+    ctx.strokeStyle = '#efe9e1'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - Rr, y); ctx.stroke();
+    ctx.fillStyle = '#9aa0ab'; ctx.fillText(opts.fmt ? opts.fmt(v) : big(v), L - 8, y);
+  }
+  if (opts.xLabels) {
+    ctx.textBaseline = 'top';
+    for (const [frac, t] of opts.xLabels) { ctx.textAlign = frac <= 0 ? 'left' : frac >= 1 ? 'right' : 'center'; ctx.fillText(t, L + (W - L - Rr) * frac, H - B + 8); }
+  }
+  for (const s of series) {
+    const d = s.data; if (d.length < 2) continue;
+    const step = Math.max(1, Math.floor(d.length / (W - L - Rr)));
+    const pts = []; for (let i = 0; i < d.length; i += step) pts.push([X(i), Y(d[i])]); pts.push([X(d.length - 1), Y(d[d.length - 1])]);
+    if (s.fill) {
+      const gr = ctx.createLinearGradient(0, T, 0, H - B);
+      gr.addColorStop(0, s.fill); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.beginPath(); ctx.moveTo(pts[0][0], H - B);
+      for (const [x, y] of pts) ctx.lineTo(x, y);
+      ctx.lineTo(pts[pts.length - 1][0], H - B); ctx.closePath(); ctx.fillStyle = gr; ctx.fill();
+    }
+    ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.strokeStyle = s.color; ctx.lineWidth = (s.width || 2.5) * dpr; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+    const [lx, ly] = pts[pts.length - 1];
+    ctx.beginPath(); ctx.arc(lx, ly, 4.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2.5 * dpr; ctx.stroke();
+    if (s.dots) for (const dt of s.dots) {
+      ctx.beginPath(); ctx.arc(X(dt.i), Y(dt.v), 3.5 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = dt.ok ? '#55c08a' : '#d6d9df'; ctx.fill();
+    }
+  }
+}
+function drawChart() {
+  const sim = S.sim, n = sim.hour;
+  const air = Array.from(sim.series.air.subarray(0, n)), dep = Array.from(sim.series.dep.subarray(0, n));
+  const mxA = Math.max(1e-9, ...air), mxD = Math.max(1e-9, ...dep);
+  lineChart($('chart'), [
+    { data: dep.map(v => v / mxD * 100), color: '#ffa974', fill: 'rgba(255,169,116,0.28)' },
+    { data: air.map(v => v / mxA * 100), color: '#b77df0', fill: 'rgba(183,125,240,0.22)' }
+  ], { min: 0, fmt: v => v.toFixed(0) + '%', empty: '재생하거나 채점하면 그래프가 그려져요',
+       xLabels: n > 24 ? [[0, '1월 1일'], [1, `${dateOf(n - 1).m}월 ${dateOf(n - 1).d}일`]] : null });
+}
+function drawSearchChart() {
+  const lg = S.searchLog || [];
+  lineChart($('search-chart'), [{ data: lg.map(e => e.best), color: '#5f8fd1', fill: 'rgba(95,143,209,0.2)',
+    dots: lg.filter(e => e.it > 0 && e.cand != null).map(e => ({ i: e.it, v: Math.min(e.cand, Math.max(...lg.map(z => z.best))), ok: e.ok })) }],
+    { empty: '탐색을 시작하면 그려져요', xLabels: lg.length > 1 ? [[0, '시작'], [1, `시도 ${lg.length - 1}`]] : null });
+}
+
+/* 학습 모델(ONNX) — 입력 grid [1,9,64,64], globals [1,5] → 출력 logits [1,4096] */
+async function ensureOrt() {
+  if (window.ort) return window.ort;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('onnxruntime-web을 불러오지 못했어요 (인터넷 연결 필요)'));
+    document.head.appendChild(s);
+  });
+  return window.ort;
+}
+async function loadOnnx(file) {
+  $('onnx-info').textContent = '불러오는 중…';
+  try {
+    const ort = await ensureOrt();
+    const sess = await ort.InferenceSession.create(await file.arrayBuffer(), { executionProviders: ['wasm'] });
+    S.onnx = sess;
+    $('onnx-info').innerHTML = `${file.name}<br>입력: ${sess.inputNames.join(', ')} · 출력: ${sess.outputNames.join(', ')}`;
+    setBusy(false);
+  } catch (err) { S.onnx = null; $('onnx-info').textContent = '' + err.message; }
+}
+async function onnxLogits(obs) {
+  const ort = window.ort, sess = S.onnx, names = sess.inputNames, feeds = {};
+  const gName = names.includes('grid') ? 'grid' : names[0], kName = names.includes('globals') ? 'globals' : names[1];
+  feeds[gName] = new ort.Tensor('float32', obs.grid, obs.shape);
+  if (kName) feeds[kName] = new ort.Tensor('float32', obs.globals, [1, obs.globals.length]);
+  let out;
+  try { out = await sess.run(feeds); }
+  catch (err) { throw new Error('모델 입력 규격이 달라요 (grid [1,9,64,64], globals [1,6]) · ' + err.message); }
+  const t = out[sess.outputNames[0]];
+  if (t.data.length !== NC) throw new Error(`출력 크기가 ${t.data.length}개예요 (4096개여야 해요)`);
+  return Float32Array.from(t.data);
+}
+
+/* ---------- 상호작용 ---------- */
+function cellAt(e) {
+  const r = overC.getBoundingClientRect(), k = cellPx();
+  const x = Math.floor((e.clientX - r.left - S.ox) / k), y = Math.floor((e.clientY - r.top - S.oy) / k);
+  return (x >= 0 && y >= 0 && x < NX && y < NY) ? y * NX + x : -1;
+}
+function tooltip(e, i) {
+  const tt = $('tooltip');
+  if (i < 0 || S.drag) { tt.style.display = 'none'; return; }
+  const sim = S.sim, T = sim.T, W = sim.W, sea = T.lc[i] === A.LC.SEA;
+  const wn = windName(W.u[i], W.v[i]), spd = Math.hypot(W.u[i], W.v[i]);
+  const kind = ['바다', '평지', '숲', '높은 산'][T.lc[i]];
+  tt.innerHTML =
+    `<b>${kind}</b>${sea ? '' : ` · 높이 ${nf(T.elev[i], 0)} m`} · ${nf(W.Tc[i])} ℃<br>` +
+    `바람 ${wn.arrow} ${wn.name} ${nf(spd)} m/s${W.P[i] > 0.1 ? ` · 비 ${nf(W.P[i])} mm/h` : ''}<br>` +
+    `혼합층 ${nf(W.H[i], 0)} m · 기압 ${W.p[i] >= 0 ? '+' : ''}${nf(W.p[i])} hPa<br>` +
+    `지금 오염 <b>${nf(sim.cSO2[i])}</b> µg/m³ · 평균 ${nf(sim.avgSO2()[i])}<br>` +
+    (sea ? '' : `이 칸의 벌점 <b>${nf(sim.penalty().map[i], 2)}</b>`) +
+    (sim.factories[i] ? ` · 공장 <b>${sim.factories[i]}</b>개` : '');
+  tt.style.display = 'block';
+  tt.style.left = Math.min(window.innerWidth - tt.offsetWidth - 10, e.clientX + 16) + 'px';
+  tt.style.top = Math.min(window.innerHeight - tt.offsetHeight - 10, e.clientY + 16) + 'px';
+}
+function setView(id) {
+  S.view = id;
+  document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.v === id));
+  drawLegend(); S.dirty = true;
+}
+function setPlaying(p) {
+  S.playing = p && S.sim.hour < HOURS && !S.scoring;
+  $('play').textContent = S.playing ? '멈춤' : '▶ 재생';
+}
+
+/* ---------- 루프 ---------- */
+function frame(ts) {
+  const dt = Math.min(0.1, (ts - (S.last || ts)) / 1000); S.last = ts;
+  if (S.playing) {
+    S.acc += dt * S.speed;
+    let n = Math.floor(S.acc); S.acc -= n;
+    const t0 = performance.now();
+    while (n-- > 0 && S.sim.hour < HOURS) { S.sim.stepHour(); S.dirty = true; S.hudDirty = true; if (performance.now() - t0 > 14) { S.acc = 0; break; } }
+    if (S.sim.hour >= HOURS) setPlaying(false);
+  }
+  if (S.dirty) { renderField(); S.dirty = false; }
+  if (S.hudDirty && ts - S.lastHud > 200) { updateHud(); S.lastHud = ts; S.hudDirty = false; }
+  stepParticles();
+  drawOverlay();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 시작 ---------- */
+$('views').innerHTML = VIEWS.map(v => `<button data-v="${v.id}">${v.label}</button>`).join('');
+$('views').querySelectorAll('button').forEach(b => b.onclick = () => setView(b.dataset.v));
+const SPEEDS = [[1, '느리게'], [24, '보통'], [168, '빠르게']];
+$('speeds').innerHTML = SPEEDS.map(([v, t]) => `<button data-s="${v}" title="1초에 ${v}시간">${t}</button>`).join('');
+$('speeds').querySelectorAll('button').forEach(b => b.onclick = () => {
+  S.speed = +b.dataset.s; $('speeds').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+});
+$('speeds').querySelector('[data-s="24"]').classList.add('on');
+$('months').innerHTML = Array.from({ length: 12 }, (_, k) => `<span>${k + 1}월</span>`).join('');
+$('play').onclick = () => setPlaying(!S.playing);
+$('btn-score').onclick = score;
+$('btn-reset').onclick = () => { if (S.busy) return; setPlaying(false); S.scoredFresh = false; S.sim.reset(); initParticles(); S.dirty = true; updateHud(); };
+$('btn-world').onclick = () => { if (S.busy) return; setPlaying(false); newWorld(1 + Math.floor(Math.random() * 99999)); };
+document.querySelectorAll('#ai-agents button').forEach(b => b.onclick = () => runAgent(b.dataset.agent));
+$('nfac').oninput = e => { S.nFac = +e.target.value; $('nfac-v').textContent = S.nFac + '개'; };
+$('btn-onnx').onclick = () => $('onnx-file').click();
+$('onnx-file').onchange = e => { if (e.target.files[0]) loadOnnx(e.target.files[0]); e.target.value = ''; };
+$('btn-fit').onclick = fitView;
+$('btn-zin').onclick = () => zoomAt(VW / 2, VH / 2, 1.4);
+$('btn-zout').onclick = () => zoomAt(VW / 2, VH / 2, 1 / 1.4);
+
+// 드래그 이동 · 휠 줌 · 더블클릭 원위치
+overC.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = overC.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+}, { passive: false });
+overC.addEventListener('pointerdown', e => {
+  overC.setPointerCapture(e.pointerId);
+  S.drag = { x: e.clientX, y: e.clientY, ox: S.ox, oy: S.oy };
+  overC.style.cursor = 'grabbing'; $('tooltip').style.display = 'none';
+  $('hint').style.opacity = 0;
+});
+overC.addEventListener('pointermove', e => {
+  if (S.drag) {
+    S.ox = S.drag.ox + e.clientX - S.drag.x; S.oy = S.drag.oy + e.clientY - S.drag.y;
+    viewChanged();
+  } else { S.hover = cellAt(e); tooltip(e, S.hover); }
+});
+const endDrag = () => { S.drag = null; overC.style.cursor = 'grab'; };
+overC.addEventListener('pointerup', endDrag);
+overC.addEventListener('pointercancel', endDrag);
+overC.addEventListener('pointerleave', () => { S.hover = -1; $('tooltip').style.display = 'none'; });
+overC.addEventListener('dblclick', fitView);
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!S.playing); }
+  else if (e.key === '+' || e.key === '=') zoomAt(VW / 2, VH / 2, 1.4);
+  else if (e.key === '-') zoomAt(VW / 2, VH / 2, 1 / 1.4);
+  else if (e.key === '0') fitView();
+});
+window.addEventListener('resize', resize);
+
+resize();
+newWorld(1);
+fitView();
+setView('wind');
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
