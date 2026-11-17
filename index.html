@@ -220,15 +220,22 @@ footer .score{background:var(--acc);color:#fff;border-color:var(--acc);font-weig
 .ai-banner.done .ab-bar div{background:var(--good)}
 .ab-close{top:8px}
 .zoomctl{top:auto;bottom:12px;right:12px}
+header .region{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+header .region select{font:inherit;color:var(--ink,#222);background:var(--card);border:1px solid var(--line);border-radius:3px;padding:5px 8px;max-width:230px}
+header .region select:disabled{opacity:.5}
+.hidden{display:none!important}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <h1>바람과 오염 관측소</h1>
-    <span class="sub">640km × 640km 가상의 땅 · 대기 역학 모델</span>
+    <span class="sub" id="world-sub">640km × 640km 가상의 땅 · 대기 역학 모델</span>
     <div class="spacer"></div>
-    <button id="btn-world" class="soft">새 지형</button>
+    <label class="region"><span>지형</span><select id="region"></select></label>
+    <button id="btn-world" class="soft" title="무작위로 만든 가상의 땅">새 가상 지형</button>
+    <button id="btn-terrain-save" class="soft hidden" title="지금 지형을 파일로 저장 (인터넷 없이 다시 열 수 있어요)">지형 저장</button>
+    <input type="file" id="terrain-file" accept=".json,application/json" hidden>
   </header>
 
   <main>
@@ -421,6 +428,42 @@ function generateTerrain(seed) {
   return { seed, elev, dhx, dhy, lc, cap };
 }
 
+/* ---------- 실제 지형: 10km 칸 평균 고도(m, 바다는 0 이하) → 시뮬레이터 지형 ----------
+   meta = { name, lat, lon }  (lat·lon = 지도 가운데). 토지 피복은 고도·경사로 추정:
+   바다 = 고도 0 이하, 높은 산 = 1500m 초과, 숲 = 500m 초과 또는 경사 2.5% 초과, 나머지 = 평지 */
+const REAL = { HIGH: 1500, FOREST_ELEV: 500, FOREST_SLOPE: 0.025, LAT_MIN: 15, LAT_MAX: 65 };
+function terrainFromElev(elevIn, meta) {
+  meta = meta || {};
+  const F = () => new Float32Array(NC);
+  const elev = F(), dhx = F(), dhy = F(), lc = new Uint8Array(NC), cap = new Uint8Array(NC);
+  for (let i = 0; i < NC; i++) { const e = +elevIn[i] || 0; elev[i] = e > 0 ? Math.max(5, e) : Math.min(-5, e); }
+  const H = i => Math.max(0, elev[i]);
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const i = y * NX + x;
+    const xl = Math.max(0, x - 1), xr = Math.min(NX - 1, x + 1), yu = Math.max(0, y - 1), yd = Math.min(NY - 1, y + 1);
+    dhx[i] = (H(y * NX + xr) - H(y * NX + xl)) / ((xr - xl) * DX);
+    dhy[i] = (H(yd * NX + x) - H(yu * NX + x)) / ((yd - yu) * DX);
+    const slope = Math.hypot(dhx[i], dhy[i]);
+    lc[i] = elev[i] <= 0 ? LC.SEA : elev[i] > REAL.HIGH ? LC.HIGH
+          : (elev[i] > REAL.FOREST_ELEV || slope > REAL.FOREST_SLOPE) ? LC.FOREST : LC.LOW;
+    cap[i] = (lc[i] === LC.SEA || lc[i] === LC.HIGH) ? 0 : PHYS.MAX_PER_CELL;
+  }
+  const lat = +meta.lat || 37, lon = +meta.lon || 127;
+  // 위도에 맞는 코리올리 계수(적도 근처는 하한). 기온: 해면 연평균(tMean)·계절 진폭(tAmp), 없으면 위도로 추정
+  const f = 2 * 7.2921e-5 * Math.sin(Math.max(REAL.LAT_MIN, Math.abs(lat)) * Math.PI / 180);
+  const key = 'geo:' + lat.toFixed(3) + ',' + lon.toFixed(3);
+  let h = 2166136261; for (let k = 0; k < key.length; k++) h = Math.imul(h ^ key.charCodeAt(k), 16777619);
+  return { seed: (h >>> 0) || 1, elev, dhx, dhy, lc, cap, real: true, name: meta.name || '실제 지형', lat, lon, f,
+           tMean: meta.tMean != null ? +meta.tMean : 12 - (lat - 37) * 0.7, tAmp: meta.tAmp != null ? +meta.tAmp : 13, key };
+}
+/* 칸(i) 가운데의 위도·경도 (실제 지형일 때). 행 0 = 북쪽 */
+function cellLatLon(T, i) {
+  const x = i % NX, y = (i / NX) | 0;
+  const north = (NY / 2 - y - 0.5) * DX / 1000, east = (x + 0.5 - NX / 2) * DX / 1000;
+  const lat = T.lat + north / 110.574;
+  return [lat, T.lon + east / (111.32 * Math.cos(lat * Math.PI / 180))];
+}
+
 /* ---------- 기상: 1층 대기 경계층 역학 모델 ----------
    20km 격자(32×32)에서 다음 방정식을 시간 적분한다.
    운동량  du/dt = −g'∇(h+zs) + (h/2)(g/θ₀)∇θ' − f k×(u − u_g) − C_d|u|u/h + ν∇²u
@@ -447,6 +490,7 @@ const qsat = (Tc, pHpa) => 0.622 * 6.112 * Math.exp(17.67 * Tc / (Tc + 243.5)) /
 function Weather(T, seed, h0) {
   h0 = h0 || 0;
   this.T = T;
+  this.f = T.f || DYN.F;
   this.rng = mulberry32((seed * 7919 + 13 + h0 * 31) >>> 0);
   const F = () => new Float32Array(NC), D = () => new Float64Array(NDC);
   // 10km 출력
@@ -522,10 +566,10 @@ Weather.prototype.forcing = function (hour) {
   const c = climate, doy = hour / 24, wf = Math.cos(2 * Math.PI * (doy - 15) / 365);
   const summer = Math.max(0, -wf), winter = Math.max(0, wf);
   const hod = hour % 24, day = Math.max(0, Math.sin(Math.PI * (hod - 6) / 12));
-  this.season = { wf, summer, winter, day, Tbase: 12 - 13 * wf };
+  this.season = { wf, summer, winter, day, Tbase: (this.T.tMean != null ? this.T.tMean : 12) - (this.T.tAmp != null ? this.T.tAmp : 13) * wf };
   const bg = wf > 0 ? 7 * wf * c.monsoon : 5 * wf * c.monsoon;          // 겨울 북서 / 여름 남동 계절풍(지균)
   const bu = bg * 0.7071 + 2 * (0.5 + 0.5 * winter), bv = bg * 0.7071;
-  const K = 100 / (1.2 * DYN.F * DX);                                    // (hPa/10km칸) → m/s
+  const K = 100 / (1.2 * DYN.F * DX);   // 기압계 세기는 그대로 두고 바람 세기가 위도에 따라 튀지 않게 기준 위도 값 사용                                    // (hPa/10km칸) → m/s
   const sys = this.systems, ns = Math.min(sys.length, 16), ex = this.ex, ey = this.ey;
   for (let k = 0; k < ns; k++) {
     const s = sys[k], q = 1 / (2 * s.r * s.r);
@@ -609,7 +653,7 @@ Weather.prototype.step = function (dt) {
     nq[I] = q[a] * w00 + q[a + 1] * w10 + q[a + N] * w01 + q[a + N + 1] * w11;
   }
   // 3) 힘: 기압경도(지형+경계층 두께+기온), 코리올리(비지균 성분 회전), 마찰, 점성 / 4) 열·수증기
-  const b = DYN.G / DYN.TH0, cf = Math.cos(DYN.F * dt), sf = Math.sin(DYN.F * dt), kv = DYN.NU * dt / (DXD * DXD);
+  const b = DYN.G / DYN.TH0, cf = Math.cos(this.f * dt), sf = Math.sin(this.f * dt), kv = DYN.NU * dt / (DXD * DXD);
   const Tb = s.Tbase, precip = climate.precip;
   for (let Y = 0; Y < N; Y++) for (let X = 0; X < N; X++) {
     const I = Y * N + X;
@@ -739,8 +783,9 @@ const FAST = { STARTS: [0, 1, 2, 3, 4, 5, 6, 7].map(k => Math.round(24 * (10 + k
 
 function Sim(o) {
   o = o || {};
-  this.seed = (o.seed >>> 0) || 1;
-  this.T = generateTerrain(this.seed);
+  this.T = o.terrain || generateTerrain((o.seed >>> 0) || 1);
+  this.seed = o.terrain ? this.T.seed : ((o.seed >>> 0) || 1);
+  this.key = this.T.key || ('seed:' + this.seed);
   this.factories = new Uint8Array(NC);
   const F = () => new Float32Array(NC);
   this.mS2 = F(); this.mS4 = F(); this.ox = F(); this.tmp = F(); this.tmp2 = F();  // kg S
@@ -1065,7 +1110,7 @@ const AI = {
   }
 };
 
-root.AirSim = { CONFIG, LC, PHYS, PEN, DYN, FAST, AI, climate, mulberry32, generateTerrain, Weather, Sim };
+root.AirSim = { CONFIG, LC, PHYS, PEN, DYN, FAST, AI, climate, mulberry32, generateTerrain, terrainFromElev, cellLatLon, REAL, Weather, Sim };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
 
@@ -1116,7 +1161,7 @@ const VIEWS = [
 
 const S = {
   sim: null, view: 'wind', playing: false, speed: 24, acc: 0, last: 0, hover: -1, dirty: true, lastHud: 0,
-  runs: [], runSeq: 0, curRun: 0, busy: false, onnx: null, nFac: 24,
+  runs: [], runSeq: 0, curRun: 0, busy: false, onnx: null, nFac: 24, geoCache: new Map(),
   think: null, pick: -1, pickT: 0, move: null, ruleCache: new Map(), searchLog: [], scoring: false, scoredFresh: false,
   // 지도 보기 변환: 화면 좌표 = (칸 좌표 × k) + (ox, oy)
   zoom: 1, ox: 0, oy: 0, drag: null
@@ -1162,9 +1207,144 @@ function resize() {
   viewChanged();
 }
 
+/* ---------- 실제 지형 불러오기 ----------
+   고도: AWS Terrain Tiles(Terrarium PNG, 전 세계, 키 없음)를 브라우저에서 받아 10km 칸 평균으로 줄임.
+   지도 가운데 위도·경도에서 동서·남북으로 ±320km. 기후 값(계절풍·정체·강수·혼합고)과 기온(해면 연평균, 계절 진폭 ℃)은 지역별 대략적인 가정값. */
+const DEFAULT_CLIMATE = { monsoon: 1, stagnation: 0.2, precip: 1, mixing: 1 };
+const REGIONS = [
+  { id: 'kr',    name: '대한민국',              lat: 36.2, lon: 127.9,  tMean: 12.5, tAmp: 13, climate: { monsoon: 1.0, stagnation: 0.20, precip: 1.0, mixing: 1.0 } },
+  { id: 'jp-kt', name: '일본 간토 (도쿄 일대)',  lat: 36.0, lon: 139.2,  tMean: 15.5, tAmp: 11, climate: { monsoon: 0.8, stagnation: 0.15, precip: 1.3, mixing: 1.0 } },
+  { id: 'jp-ks', name: '일본 간사이 (오사카 일대)', lat: 34.8, lon: 135.6, tMean: 16.5, tAmp: 11.5, climate: { monsoon: 0.8, stagnation: 0.15, precip: 1.2, mixing: 1.0 } },
+  { id: 'cn-n',  name: '중국 화북평원 (베이징·톈진)', lat: 39.0, lon: 116.6, tMean: 12.5, tAmp: 15.5, climate: { monsoon: 1.0, stagnation: 0.35, precip: 0.5, mixing: 0.85 } },
+  { id: 'cn-e',  name: '중국 창장 삼각주 (상하이)', lat: 31.0, lon: 120.4, tMean: 16.5, tAmp: 12, climate: { monsoon: 0.8, stagnation: 0.25, precip: 1.1, mixing: 1.0 } },
+  { id: 'tw',    name: '대만',                  lat: 23.8, lon: 120.9,  tMean: 23, tAmp: 7, climate: { monsoon: 0.7, stagnation: 0.15, precip: 1.6, mixing: 1.1 } },
+  { id: 'in',    name: '인도 북부 (델리 일대)',   lat: 28.6, lon: 77.4,   tMean: 25, tAmp: 9.5, climate: { monsoon: 0.9, stagnation: 0.35, precip: 0.7, mixing: 1.1 } },
+  { id: 'de',    name: '독일 라인·루르',         lat: 51.0, lon: 7.4,    tMean: 10.5, tAmp: 8.5, climate: { monsoon: 0.15, stagnation: 0.25, precip: 0.8, mixing: 0.9 } },
+  { id: 'alps',  name: '알프스 (스위스 일대)',    lat: 46.6, lon: 8.6,    tMean: 9.5, tAmp: 9, climate: { monsoon: 0.15, stagnation: 0.30, precip: 1.3, mixing: 0.85 } },
+  { id: 'us-la', name: '미국 LA 분지',           lat: 34.3, lon: -118.0, tMean: 18.5, tAmp: 5.5, climate: { monsoon: 0.1, stagnation: 0.45, precip: 0.35, mixing: 0.8 } },
+  { id: 'us-gl', name: '미국 오대호 (시카고 일대)', lat: 42.0, lon: -87.0, tMean: 10, tAmp: 14, climate: { monsoon: 0.2, stagnation: 0.15, precip: 0.8, mixing: 1.0 } }
+];
+const TILE_URLS = [
+  'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+  'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'
+];
+const TILE_Z = 7, TILE_SUB = 4;          // 줌 7 (약 1km/픽셀), 칸마다 4×4 지점 평균
+function loadTile(z, x, y) {
+  const tryUrl = k => new Promise((res, rej) => {
+    if (k >= TILE_URLS.length) return rej(new Error('고도 타일을 받지 못했어요'));
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas'); c.width = c.height = 256;
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 0, 256, 256).data, e = new Float32Array(65536);
+        for (let p = 0; p < 65536; p++) e[p] = d[4 * p] * 256 + d[4 * p + 1] + d[4 * p + 2] / 256 - 32768;   // Terrarium 형식
+        res(e);
+      } catch (err) { tryUrl(k + 1).then(res, rej); }
+    };
+    img.onerror = () => tryUrl(k + 1).then(res, rej);
+    img.src = TILE_URLS[k].replace('{z}', z).replace('{x}', x).replace('{y}', y);
+  });
+  return tryUrl(0);
+}
+async function fetchRealElev(lat0, lon0, onProgress) {
+  const z = TILE_Z, W = 256 * (1 << z), n = 1 << z, pts = [];
+  for (let i = 0; i < NC; i++) {
+    const cx = i % NX, cy = (i / NX) | 0;
+    for (let a = 0; a < TILE_SUB; a++) for (let b = 0; b < TILE_SUB; b++) {
+      const north = (NY / 2 - cy - (a + 0.5) / TILE_SUB) * 10, east = (cx + (b + 0.5) / TILE_SUB - NX / 2) * 10;
+      const lat = lat0 + north / 110.574, lon = lon0 + east / (111.32 * Math.cos(lat * Math.PI / 180));
+      const fx = (lon + 180) / 360 * W, sl = Math.sin(lat * Math.PI / 180);
+      const fy = (0.5 - Math.log((1 + sl) / (1 - sl)) / (4 * Math.PI)) * W;
+      const tx = ((Math.floor(fx / 256) % n) + n) % n, ty = Math.min(n - 1, Math.max(0, Math.floor(fy / 256)));
+      pts.push(i, tx, ty, Math.min(255, Math.max(0, Math.floor(fx - Math.floor(fx / 256) * 256))), Math.min(255, Math.max(0, Math.floor(fy - Math.floor(fy / 256) * 256))));
+    }
+  }
+  const need = new Map();
+  for (let k = 0; k < pts.length; k += 5) need.set(pts[k + 1] + ',' + pts[k + 2], null);
+  const keys = [...need.keys()]; let done = 0;
+  const work = async () => {
+    while (keys.length) {
+      const key = keys.pop(), [tx, ty] = key.split(',').map(Number);
+      need.set(key, await loadTile(z, tx, ty));
+      onProgress && onProgress(++done / need.size, need.size);
+    }
+  };
+  await Promise.all([work(), work(), work(), work(), work(), work()]);
+  const land = new Float64Array(NC), nl = new Uint16Array(NC), sea = new Float64Array(NC), ns = new Uint16Array(NC);
+  for (let k = 0; k < pts.length; k += 5) {
+    const i = pts[k], e = need.get(pts[k + 1] + ',' + pts[k + 2])[pts[k + 4] * 256 + pts[k + 3]];
+    if (e > 0) { land[i] += e; nl[i]++; } else { sea[i] += e; ns[i]++; }
+  }
+  const elev = new Float32Array(NC);
+  for (let i = 0; i < NC; i++) elev[i] = ns[i] > nl[i] ? sea[i] / ns[i] : land[i] / Math.max(1, nl[i]);
+  return elev;
+}
+function fillRegionSelect() {
+  const sel = $('region');
+  sel.innerHTML = `<option value="virtual">가상 지형 (무작위)</option><optgroup label="실제 지형">` +
+    REGIONS.map(r => `<option value="${r.id}">${r.name}</option>`).join('') +
+    `</optgroup><optgroup label="기타"><option value="custom">위도·경도 직접 입력…</option><option value="file">지형 파일 열기…</option></optgroup>`;
+}
+function updateWorldTitle() {
+  const T = S.sim.T;
+  if (T.real) {
+    const ns = T.lat >= 0 ? 'N' : 'S', ew = T.lon >= 0 ? 'E' : 'W';
+    $('world-sub').textContent = `${T.name} · 중심 ${Math.abs(T.lat).toFixed(1)}°${ns} ${Math.abs(T.lon).toFixed(1)}°${ew} · 640km × 640km 실제 고도`;
+  } else $('world-sub').textContent = '640km × 640km 가상의 땅 · 대기 역학 모델';
+  $('btn-terrain-save').classList.toggle('hidden', !T.real);
+  $('region').value = T.real ? (T.regionId || '') : 'virtual';
+}
+async function loadRegion(r) {
+  if (S.busy) return;
+  setPlaying(false);
+  const prevSel = S.sim && S.sim.T.real ? (S.sim.T.regionId || '') : 'virtual';
+  $('region').disabled = true;
+  setBusy(true, `${r.name} · 실제 고도 데이터를 받는 중…`);
+  try {
+    const ck = r.lat.toFixed(3) + ',' + r.lon.toFixed(3);
+    let elev = S.geoCache.get(ck);
+    if (!elev) {
+      elev = await fetchRealElev(r.lat, r.lon, (p, nt) => { setProg(p); $('ai-status').textContent = `${r.name} · 고도 타일 ${Math.round(p * nt)} / ${nt}장 받는 중…`; });
+      S.geoCache.set(ck, elev);
+    }
+    const T = A.terrainFromElev(elev, r);
+    T.regionId = r.id || ''; T.climate = Object.assign({}, DEFAULT_CLIMATE, r.climate || {});
+    let land = 0; for (let i = 0; i < NC; i++) if (T.cap[i]) land++;
+    if (land < 24) throw new Error('공장을 지을 수 있는 땅이 거의 없어요 (바다나 높은 산뿐)');
+    setBusy(false); setProg(0); $('region').disabled = false;
+    newWorld({ terrain: T });
+  } catch (err) {
+    setBusy(false); setProg(0); $('region').disabled = false; $('region').value = prevSel;
+    $('ai-status').textContent = `지형을 불러오지 못했어요: ${err.message} · 인터넷 연결을 확인하거나, 저장해 둔 지형 파일(.json)을 여세요`;
+  }
+}
+function saveTerrainFile() {
+  const T = S.sim.T; if (!T.real) return;
+  const data = { format: 'airsim-terrain-1', name: T.name, lat: T.lat, lon: T.lon, regionId: T.regionId || '', climate: T.climate || DEFAULT_CLIMATE, tMean: T.tMean, tAmp: T.tAmp,
+                 nx: NX, ny: NY, cell_km: DX / 1000, source: 'AWS Terrain Tiles (Terrarium), 10km 칸 평균 고도 m',
+                 elev: Array.from(T.elev, v => Math.round(v)) };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+  a.download = `terrain_${(T.regionId || 'custom')}_${T.lat.toFixed(2)}_${T.lon.toFixed(2)}.json`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function openTerrainFile(file) {
+  try {
+    const d = JSON.parse(await file.text());
+    if (!Array.isArray(d.elev) || d.elev.length !== NC) throw new Error(`고도 값이 ${NC}개여야 해요`);
+    const T = A.terrainFromElev(Float32Array.from(d.elev), d);
+    T.regionId = d.regionId || ''; T.climate = Object.assign({}, DEFAULT_CLIMATE, d.climate || {});
+    newWorld({ terrain: T });
+  } catch (err) { $('ai-status').textContent = '지형 파일을 열지 못했어요: ' + err.message; updateWorldTitle(); }
+}
+
 /* ---------- 세계 · 공장 ---------- */
-function newWorld(seed) {
-  S.sim = new A.Sim({ seed });
+function newWorld(opt) {
+  if (typeof opt === 'number') opt = { seed: opt };
+  Object.assign(A.climate, DEFAULT_CLIMATE, (opt.terrain && opt.terrain.climate) || {});
+  S.sim = opt.terrain ? new A.Sim({ terrain: opt.terrain }) : new A.Sim({ seed: opt.seed });
+  updateWorldTitle();
   const T = S.sim.T;
   for (let i = 0; i < NC; i++) shade[i] = Math.min(1, Math.max(0, 0.5 + (T.dhx[i] + T.dhy[i]) * 9));
   S.runs = []; S.curRun = 0; S.scoredFresh = false; S.ruleCache = new Map(); S.searchLog = []; renderAiTable();
@@ -1404,13 +1584,16 @@ function updatePenalty() {
 
 /* ---------- 백그라운드 작업 (Web Worker) ---------- */
 function workerMain() {
-  let sim = null, seed = -1;
+  let sim = null, key = '';
   const AS = self.AirSim, H = AS.CONFIG.HOURS;
   self.onmessage = function (e) {
     const d = e.data, t0 = performance.now(), post = m => self.postMessage(Object.assign({ job: d.job }, m));
     try {
       Object.assign(AS.climate, d.climate || {});
-      if (!sim || seed !== d.seed) { sim = new AS.Sim({ seed: d.seed }); seed = d.seed; }
+      if (!sim || key !== d.key) {
+        sim = d.terrain ? new AS.Sim({ terrain: AS.terrainFromElev(d.terrain.elev, d.terrain) }) : new AS.Sim({ seed: d.seed });
+        key = d.key;
+      }
       if (d.type === 'full') {
         sim.factories.set(d.factories); sim.reset();
         while (sim.hour < H) { sim.stepHour(); if (sim.hour % 96 === 0) post({ type: 'progress', p: sim.hour / H }); }
@@ -1441,7 +1624,8 @@ function runJob(msg, onMsg) {
   return new Promise((resolve, reject) => {
     const id = ++jobSeq;
     jobs[id] = d => { if (d.type === 'done') resolve(d); else if (d.type === 'error') reject(new Error(d.msg)); else onMsg && onMsg(d); };
-    try { getWorker().postMessage(Object.assign({ job: id, seed: S.sim.seed, climate: Object.assign({}, A.climate) }, msg)); }
+    try { getWorker().postMessage(Object.assign({ job: id, seed: S.sim.seed, key: S.sim.key, climate: Object.assign({}, A.climate),
+      terrain: S.sim.T.real ? { elev: S.sim.T.elev, name: S.sim.T.name, lat: S.sim.T.lat, lon: S.sim.T.lon, tMean: S.sim.T.tMean, tAmp: S.sim.T.tAmp } : null }, msg)); }
     catch (err) { delete jobs[id]; reject(err); }
   });
 }
@@ -1500,7 +1684,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function setBusy(b, label) {
   S.busy = b; S.scoring = b;
-  for (const id of ['btn-score', 'play', 'btn-world', 'btn-reset']) $(id).disabled = b;
+  for (const id of ['btn-score', 'play', 'btn-world', 'btn-reset', 'region', 'btn-terrain-save']) $(id).disabled = b;
   $('nfac').disabled = b;
   document.querySelectorAll('#ai-agents button').forEach(x => x.disabled = b || (x.dataset.agent === 'onnx' && !S.onnx));
   document.body.classList.toggle('ai-busy', b);
@@ -1602,7 +1786,7 @@ async function animatePlace(key, obs) {
 
 /* 같은 지형·공장 수의 규칙 기반 점수 (비교용, 한 번만 계산해 저장) */
 async function ruleScore(n) {
-  const key = `${S.sim.seed}:${n}`;
+  const key = `${S.sim.key}:${n}`;
   if (S.ruleCache.has(key)) return S.ruleCache.get(key);
   const lay = A.AI.policies.rule.run(A.AI.observe(S.sim, n));
   const d = await runJob({ type: 'fast', factories: lay });
@@ -1788,6 +1972,7 @@ function tooltip(e, i) {
   const kind = ['바다', '평지', '숲', '높은 산'][T.lc[i]];
   tt.innerHTML =
     `<b>${kind}</b>${sea ? '' : ` · 높이 ${nf(T.elev[i], 0)} m`} · ${nf(W.Tc[i])} ℃<br>` +
+    (T.real ? (([la, lo]) => `<span style="color:var(--muted)">${la.toFixed(2)}°${la >= 0 ? 'N' : 'S'} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? 'E' : 'W'}</span><br>`)(A.cellLatLon(T, i)) : '') +
     `바람 ${wn.arrow} ${wn.name} ${nf(spd)} m/s${W.P[i] > 0.1 ? ` · 비 ${nf(W.P[i])} mm/h` : ''}<br>` +
     `혼합층 ${nf(W.H[i], 0)} m · 기압 ${W.p[i] >= 0 ? '+' : ''}${nf(W.p[i])} hPa<br>` +
     `지금 오염 <b>${nf(sim.cSO2[i])}</b> µg/m³ · 평균 ${nf(sim.avgSO2()[i])}<br>` +
@@ -1838,6 +2023,26 @@ $('play').onclick = () => setPlaying(!S.playing);
 $('btn-score').onclick = score;
 $('btn-reset').onclick = () => { if (S.busy) return; setPlaying(false); S.scoredFresh = false; S.sim.reset(); initParticles(); S.dirty = true; updateHud(); };
 $('btn-world').onclick = () => { if (S.busy) return; setPlaying(false); newWorld(1 + Math.floor(Math.random() * 99999)); };
+fillRegionSelect();
+$('region').onchange = e => {
+  const v = e.target.value;
+  if (v === 'virtual') { if (S.sim.T.real) { setPlaying(false); newWorld(1 + Math.floor(Math.random() * 99999)); } return; }
+  if (v === 'file') { updateWorldTitle(); $('terrain-file').click(); return; }
+  if (v === 'custom') {
+    updateWorldTitle();
+    const t = prompt(`지도 가운데의 위도, 경도를 입력하세요 (북위 ${A.REAL.LAT_MIN}~${A.REAL.LAT_MAX}°)\n예: 37.5, 127.0  (서경은 음수, 예: 40.7, -74.0)`, '35.5, 129.0');
+    if (!t) return;
+    const m = t.split(/[,\s]+/).map(Number);
+    if (m.length < 2 || !isFinite(m[0]) || !isFinite(m[1]) || m[0] < A.REAL.LAT_MIN || m[0] > A.REAL.LAT_MAX || Math.abs(m[1]) > 180) {
+      $('ai-status').textContent = `위도는 ${A.REAL.LAT_MIN}~${A.REAL.LAT_MAX}(북반구), 경도는 -180~180 사이로 입력하세요`; return;
+    }
+    loadRegion({ id: '', name: `직접 입력 (${m[0].toFixed(2)}, ${m[1].toFixed(2)})`, lat: m[0], lon: m[1], climate: DEFAULT_CLIMATE });
+    return;
+  }
+  const r = REGIONS.find(x => x.id === v); if (r) loadRegion(r);
+};
+$('terrain-file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) openTerrainFile(f); };
+$('btn-terrain-save').onclick = saveTerrainFile;
 document.querySelectorAll('#ai-agents button').forEach(b => b.onclick = () => runAgent(b.dataset.agent));
 $('nfac').oninput = e => { S.nFac = +e.target.value; $('nfac-v').textContent = S.nFac + '개'; };
 $('btn-onnx').onclick = () => $('onnx-file').click();
